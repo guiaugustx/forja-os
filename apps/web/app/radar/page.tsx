@@ -157,6 +157,7 @@ export default function RadarPage() {
             </Select>
             <span className="ml-auto text-[12px] text-neutral-500">
               Atualizado {timeAgo(lastRun?.finishedAt ?? lastRun?.startedAt ?? null)}
+              {lastRun?.status === 'done' && ` · ${lastRun.savedCount} salvas · ${lastRun.discardedCount} descartadas`}
             </span>
           </div>
 
@@ -176,6 +177,7 @@ export default function RadarPage() {
                     <th className="p-3">Nicho</th>
                     <th className="p-3">Dias no ar</th>
                     <th className="p-3">Scans</th>
+                    <th className="p-3">Tráfego</th>
                     <th className="p-3">Ticket est.</th>
                     <th className="p-3">Ângulo dominante</th>
                     <th className="p-3">Escala</th>
@@ -198,6 +200,7 @@ export default function RadarPage() {
                         )}
                       </td>
                       <td className="p-3">{o.scanCount ?? 0}</td>
+                      <td className="p-3"><TrafficDot score={o.trafficScore} /></td>
                       <td className="whitespace-nowrap p-3">{fmtTicket(o.ticketEstCents, o.market)}</td>
                       <td className="max-w-[190px] p-3 text-neutral-300">{o.xray?.angle ?? o.angle ?? '—'}</td>
                       <td className="p-3"><ScaleDots score={o.opportunityScore} /></td>
@@ -419,6 +422,18 @@ function ScaleDots({ score }: { score: number | null }) {
           style={{ height: `${6 + i * 3}px` }}
         />
       ))}
+    </span>
+  );
+}
+
+function TrafficDot({ score }: { score: number | null }) {
+  const s = score ?? 0;
+  const color = s >= 60 ? 'bg-green-500' : s >= 30 ? 'bg-amber-500' : 'bg-red-500';
+  const label = s >= 60 ? 'alto' : s >= 30 ? 'médio' : 'baixo';
+  return (
+    <span className="inline-flex items-center gap-1.5" title={`tráfego ${label} (${s})`}>
+      <span className={`h-2 w-2 rounded-full ${color}`} />
+      <span className="text-neutral-400">{s}</span>
     </span>
   );
 }

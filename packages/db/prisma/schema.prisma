@@ -63,6 +63,7 @@ model Offer {
   detectedGateway  String? // cakto | hotmart | stripe (detectado na página)
   xray             Json? // raio-x extraído pela IA {promise, mechanism, ...}
   opportunityScore Int? // score heurístico calculado na ingestão
+  trafficScore     Int? // sinal de tráfego (pixels de anúncio + circulação urlscan)
   firstSeen        DateTime?
   lastSeen         DateTime?
   daysRunning      Int           @default(0) // proxy de persistência (urlscan)
@@ -83,14 +84,15 @@ model Offer {
 
 // Registro de cada rodada de ingestão (feedback do botão "Rodar ingestão").
 model IngestionRun {
-  id         String    @id @default(cuid())
-  query      String
-  status     String    @default("running") // running | done | error
-  foundCount Int       @default(0)
-  savedCount Int       @default(0)
-  error      String?
-  startedAt  DateTime  @default(now())
-  finishedAt DateTime?
+  id             String    @id @default(cuid())
+  query          String
+  status         String    @default("running") // running | done | error
+  foundCount     Int       @default(0)
+  savedCount     Int       @default(0)
+  discardedCount Int       @default(0)
+  error          String?
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
 }
 
 enum TrendStatus {

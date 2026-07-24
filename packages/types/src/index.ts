@@ -47,6 +47,8 @@ export interface OfferXray {
   niche: string;
   market: string;
   ticketEstCents: number;
+  isSalesPage?: boolean;
+  category?: string;
 }
 
 // Oferta como o Radar/curadoria consome (inclui os campos novos da ingestão).
@@ -66,6 +68,7 @@ export interface OfferDTO {
   scanCount: number | null;
   activeAdsCount: number;
   opportunityScore: number | null;
+  trafficScore: number | null;
   xray: OfferXray | null;
   saved: boolean;
   firstSeen: string | null;
@@ -78,6 +81,7 @@ export interface IngestionRunDTO {
   status: 'running' | 'done' | 'error';
   foundCount: number;
   savedCount: number;
+  discardedCount: number;
   error: string | null;
   startedAt: string;
   finishedAt: string | null;

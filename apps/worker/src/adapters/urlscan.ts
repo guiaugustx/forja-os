@@ -72,56 +72,33 @@ export async function searchOffers(opts: {
   return hits;
 }
 
-interface ResultDetail {
-  scanCount: number | null;
+export interface DomainActivity {
+  scanCount: number; // quantas vezes o domínio foi escaneado no urlscan (proxy de circulação)
   firstSeen: string | null;
   lastSeen: string | null;
-  detectedGateway: string | null;
 }
 
-const GATEWAY_HINTS: Array<[RegExp, string]> = [
-  [/cakto/i, 'cakto'],
-  [/hotmart/i, 'hotmart'],
-  [/stripe/i, 'stripe'],
-  [/kirvano/i, 'kirvano'],
-  [/monetizze/i, 'monetizze'],
-];
-
 /**
- * Detalhe de um scan: usado para detectar o gateway pelas tecnologias/domínios
- * contactados. Persistência (primeira/última vez) vem do histórico de scans do
- * domínio; aqui damos um proxy simples via nº de domínios/links.
+ * Atividade/circulação do domínio no urlscan — proxy de tráfego: uma página que é
+ * escaneada várias vezes e recentemente está sendo acessada/compartilhada de verdade.
  */
-export async function getResultDetail(uuid: string): Promise<ResultDetail> {
-  const empty: ResultDetail = { scanCount: null, firstSeen: null, lastSeen: null, detectedGateway: null };
-  if (!uuid) return empty;
+export async function getDomainActivity(domain: string): Promise<DomainActivity> {
+  const empty: DomainActivity = { scanCount: 0, firstSeen: null, lastSeen: null };
+  if (!domain) return empty;
   const key = apiKey();
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (key) headers['API-Key'] = key;
 
-  const res = await fetch(`https://urlscan.io/api/v1/result/${uuid}/`, { headers });
+  const url = `${SEARCH_URL}?q=${encodeURIComponent(`page.domain:${domain}`)}&size=100`;
+  const res = await fetch(url, { headers });
   if (!res.ok) return empty;
-  const json = (await res.json()) as {
-    lists?: { domains?: string[] };
-    meta?: { processors?: { wappa?: { data?: Array<{ app?: string }> } } };
-    task?: { time?: string };
-  };
-
-  const domains = json.lists?.domains ?? [];
-  const apps = (json.meta?.processors?.wappa?.data ?? []).map((a) => a.app ?? '');
-  const haystack = [...domains, ...apps].join(' ');
-  let detectedGateway: string | null = null;
-  for (const [re, name] of GATEWAY_HINTS) {
-    if (re.test(haystack)) {
-      detectedGateway = name;
-      break;
-    }
-  }
-
+  const json = (await res.json()) as { results?: Array<{ task?: { time?: string } }>; total?: number };
+  const results = json.results ?? [];
+  const times = results.map((r) => r.task?.time).filter(Boolean) as string[];
+  times.sort();
   return {
-    scanCount: domains.length || null,
-    firstSeen: null,
-    lastSeen: json.task?.time ?? null,
-    detectedGateway,
+    scanCount: json.total ?? results.length,
+    firstSeen: times[0] ?? null,
+    lastSeen: times[times.length - 1] ?? null,
   };
 }

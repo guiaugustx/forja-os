@@ -11,17 +11,26 @@ export const xraySchema = z.object({
   niche: z.string(),
   market: z.string(),
   ticketEstCents: z.number().int().nonnegative(),
+  isSalesPage: z.boolean(),
+  category: z.string(),
 });
 export type Xray = z.infer<typeof xraySchema>;
 
 export const XRAY_SYSTEM = [
   'Você é um analista sênior de ofertas de produtos digitais de low ticket.',
-  'A partir do texto de uma página de vendas, extraia a engenharia reversa da oferta.',
+  'A partir do texto de uma página, extraia a engenharia reversa da oferta.',
   'Seja específico e conciso. Estime o mercado como código curto (BR, US, ES, etc.)',
   'com base no idioma/país do texto. Estime o ticket em CENTAVOS (ex.: R$97 = 9700).',
-  'Responda SOMENTE com um objeto JSON válido, sem comentários nem texto fora do JSON,',
-  'com exatamente estas chaves: promise, mechanism, avatar, pain, guarantee, angle,',
-  'niche, market, ticketEstCents.',
+  'CLASSIFIQUE também:',
+  '- isSalesPage: true SOMENTE se for uma página de vendas de um produto/oferta com',
+  '  proposta clara, benefícios e chamada para compra/checkout. false para páginas de',
+  '  link, blog, quiz, home institucional, "obrigado", ou qualquer coisa sem oferta.',
+  '- category: categoria curta em minúsculas (ex.: saude, financas, relacionamento,',
+  '  emagrecimento, infoproduto, servico-local, delivery-comida, ecommerce-fisico).',
+  '  Use "delivery-comida" para delivery/entrega de comida, restaurantes, lanches.',
+  'Responda SOMENTE com um objeto JSON válido, sem texto fora do JSON, com exatamente',
+  'estas chaves: promise, mechanism, avatar, pain, guarantee, angle, niche, market,',
+  'ticketEstCents, isSalesPage, category.',
 ].join(' ');
 
 export function buildXrayUser(input: { pageText: string; url?: string; title?: string }): string {
@@ -51,4 +60,6 @@ export const xrayMock: Xray = {
   niche: 'saude/sono',
   market: 'BR',
   ticketEstCents: 9700,
+  isSalesPage: true,
+  category: 'saude',
 };
