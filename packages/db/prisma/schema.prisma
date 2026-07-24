@@ -1,0 +1,392 @@
+// Forja OS — schema do banco.
+// Núcleo: tudo orbita a entidade Product. Criativos, funis, campanhas e
+// transações são filhos dela — é o que faz os módulos conversarem.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// RADAR — motor de mineração de ofertas e tendências
+// ============================================================
+
+enum OpportunityStatus {
+  open
+  promoted
+  discarded
+}
+
+model Opportunity {
+  id           String            @id @default(cuid())
+  title        String
+  market       String // BR | US | ES ...
+  niche        String
+  score        Int               @default(0)
+  demand       String? // alta | media | baixa
+  competition  String?
+  ticketRange  String?
+  sourceNotes  String?
+  status       OpportunityStatus @default(open)
+  offerId      String?
+  offer        Offer?            @relation(fields: [offerId], references: [id])
+  products     Product[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+enum OfferSource {
+  meta
+  tiktok
+  hotmart
+  clickbank
+  urlscan
+  manual
+}
+
+// Oferta minerada (ingestão via urlscan / espionagem de anúncios / marketplace)
+model Offer {
+  id               String        @id @default(cuid())
+  source           OfferSource
+  advertiser       String
+  name             String
+  market           String
+  niche            String
+  ticketEstCents   Int?
+  angle            String?
+  pageUrl          String? // URL da página de vendas (ingestão urlscan)
+  screenshotUrl    String? // screenshot do urlscan
+  detectedGateway  String? // cakto | hotmart | stripe (detectado na página)
+  xray             Json? // raio-x extraído pela IA {promise, mechanism, ...}
+  opportunityScore Int? // score heurístico calculado na ingestão
+  firstSeen        DateTime?
+  lastSeen         DateTime?
+  daysRunning      Int           @default(0) // proxy de persistência (urlscan)
+  scanCount        Int? // nº de scans no urlscan (intensidade)
+  activeAdsCount   Int           @default(0)
+  sampleCreatives  Json? // [{url, format, ...}]
+  saved            Boolean       @default(false)
+  opportunities    Opportunity[]
+  drafts           OfferDraft[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@unique([source, pageUrl])
+  @@index([market, niche])
+  @@index([daysRunning])
+  @@index([opportunityScore])
+}
+
+// Registro de cada rodada de ingestão (feedback do botão "Rodar ingestão").
+model IngestionRun {
+  id         String    @id @default(cuid())
+  query      String
+  status     String    @default("running") // running | done | error
+  foundCount Int       @default(0)
+  savedCount Int       @default(0)
+  error      String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+}
+
+enum TrendStatus {
+  breakout
+  rising
+  stable
+  seasonal
+  declining
+}
+
+model TermTrend {
+  id              String      @id @default(cuid())
+  term            String
+  market          String
+  volumeMonthly   Int         @default(0)
+  growth90d       String?
+  growth12m       String?
+  status          TrendStatus @default(stable)
+  series          Json? // pontos para sparkline
+  seasonalityNote String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([term, market])
+}
+
+// ============================================================
+// GERADOR DE OFERTAS — modelagem por etapas
+// ============================================================
+
+enum OfferDraftStatus {
+  modeling
+  ready
+  launched
+}
+
+model OfferDraft {
+  id             String           @id @default(cuid())
+  status         OfferDraftStatus @default(modeling)
+  currentStep    Int              @default(0)
+  sourceOfferId  String?
+  sourceOffer    Offer?           @relation(fields: [sourceOfferId], references: [id])
+  base           Json? // {salesPageUrl, creatives[], notes, xray}
+  avatar         Json?
+  bigIdea        Json?
+  stack          Json?
+  salesCopy      Json?
+  creativeAngles Json?
+  emailSequences Json?
+  productId      String?
+  product        Product?         @relation(fields: [productId], references: [id])
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+// ============================================================
+// PRODUTO — a entidade central
+// ============================================================
+
+enum ProductStage {
+  validation
+  production
+  funnel
+  launch
+  scaling
+  paused
+}
+
+model Product {
+  id            String        @id @default(cuid())
+  name          String
+  market        String
+  currency      String        @default("BRL")
+  priceCents    Int           @default(0)
+  gateway       String? // cakto | stripe | hotmart | kirvano
+  stage         ProductStage  @default(validation)
+  brief         Json? // {persona, promise, angle, format}
+  opportunityId String?
+  opportunity   Opportunity?  @relation(fields: [opportunityId], references: [id])
+  deliverables  Deliverable[]
+  funnels       Funnel[]
+  creatives     Creative[]
+  campaigns     Campaign[]
+  transactions  Transaction[]
+  drafts        OfferDraft[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([stage])
+}
+
+enum DeliverableType {
+  main
+  bonus
+  copy
+  email
+  vsl
+  mockup
+  bump
+  upsell
+}
+
+enum DeliverableStatus {
+  todo
+  doing
+  review
+  done
+}
+
+model Deliverable {
+  id          String            @id @default(cuid())
+  productId   String
+  product     Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type        DeliverableType
+  title       String
+  status      DeliverableStatus @default(todo)
+  aiGenerated Boolean           @default(false)
+  fileUrl     String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+enum FunnelStatus {
+  draft
+  published
+}
+
+model Funnel {
+  id        String       @id @default(cuid())
+  productId String
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  status    FunnelStatus @default(draft)
+  steps     FunnelStep[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+enum FunnelStepType {
+  ad
+  advertorial
+  lp
+  checkout
+  bump
+  upsell
+  thankyou
+}
+
+model FunnelStep {
+  id       String         @id @default(cuid())
+  funnelId String
+  funnel   Funnel         @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  position Int
+  type     FunnelStepType
+  config   Json?
+  url      String?
+}
+
+enum CreativeKind {
+  video
+  static
+}
+
+enum CreativeStatus {
+  draft
+  approved
+  running
+  paused
+}
+
+model Creative {
+  id        String         @id @default(cuid())
+  productId String
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  format    String // 9x16 | 1x1 | 16x9
+  kind      CreativeKind
+  hook      String?
+  status    CreativeStatus @default(draft)
+  platform  String? // meta | tiktok
+  assetUrl  String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+enum CampaignPlatform {
+  meta
+  tiktok
+  google
+}
+
+model Campaign {
+  id              String               @id @default(cuid())
+  productId       String
+  product         Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  funnelId        String?
+  platform        CampaignPlatform
+  externalId      String?
+  name            String
+  status          String               @default("active")
+  dailyBudgetCents Int                 @default(0)
+  metrics         CampaignMetricDaily[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+}
+
+model CampaignMetricDaily {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  date       DateTime
+  spendCents Int      @default(0)
+  clicks     Int      @default(0)
+  purchases  Int      @default(0)
+  cpaCents   Int      @default(0)
+  roas       Float    @default(0)
+
+  @@unique([campaignId, date])
+}
+
+// ============================================================
+// FINANCEIRO
+// ============================================================
+
+enum TransactionType {
+  sale
+  refund
+  chargeback
+}
+
+enum TransactionStatus {
+  approved
+  pending
+  waiting
+  refunded
+}
+
+model Transaction {
+  id           String            @id @default(cuid())
+  productId    String?
+  product      Product?          @relation(fields: [productId], references: [id])
+  gateway      String
+  externalId   String
+  type         TransactionType   @default(sale)
+  method       String? // pix | card | boleto
+  amountCents  Int
+  currency     String            @default("BRL")
+  feeCents     Int               @default(0)
+  status       TransactionStatus @default(approved)
+  funnelStepId String?
+  occurredAt   DateTime          @default(now())
+  createdAt    DateTime          @default(now())
+
+  @@unique([gateway, externalId])
+  @@index([productId])
+}
+
+model GatewayBalance {
+  id            String   @id @default(cuid())
+  gateway       String   @unique
+  availableCents Int     @default(0)
+  pendingCents  Int      @default(0)
+  currency      String   @default("BRL")
+  syncedAt      DateTime @default(now())
+}
+
+model FxRate {
+  id       String   @id @default(cuid())
+  base     String
+  quote    String
+  rate     Float
+  date     DateTime
+  @@unique([base, quote, date])
+}
+
+// ============================================================
+// INTEGRAÇÕES / INFRA
+// ============================================================
+
+model Integration {
+  id             String   @id @default(cuid())
+  provider       String   @unique
+  status         String   @default("disconnected")
+  credentialsRef String? // caminho no Infisical, nunca o segredo em si
+  meta           Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model WebhookEvent {
+  id              String    @id @default(cuid())
+  provider        String
+  externalEventId String
+  payload         Json
+  processedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@unique([provider, externalEventId])
+}

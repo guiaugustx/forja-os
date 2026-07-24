@@ -1,0 +1,28 @@
+{
+  "name": "@forja/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "generate": "dotenv -e ../../.env -- prisma generate",
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "push": "dotenv -e ../../.env -- prisma db push",
+    "migrate": "dotenv -e ../../.env -- prisma migrate dev",
+    "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "studio": "dotenv -e ../../.env -- prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "prisma": "^5.20.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.5.4"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

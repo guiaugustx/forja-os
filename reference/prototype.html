@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forja OS — Central de Produtos Low Ticket</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Forja OS v1 · protótipo · linguagem visual HeroUI dark */
+:root{
+  --bg:#09090b;
+  --content1:#18181b;
+  --content2:#27272a;
+  --content3:#3f3f46;
+  --border:rgba(255,255,255,.08);
+  --border-strong:rgba(255,255,255,.15);
+  --fg:#ecedee;
+  --fg-muted:#a1a1aa;
+  --fg-faint:#71717a;
+  --primary:#006FEE;
+  --primary-soft:rgba(0,111,238,.15);
+  --success:#17c964;
+  --success-soft:rgba(23,201,100,.12);
+  --warning:#f5a524;
+  --warning-soft:rgba(245,165,36,.12);
+  --danger:#f31260;
+  --danger-soft:rgba(243,18,96,.12);
+  --secondary:#9353d3;
+  --secondary-soft:rgba(147,83,211,.14);
+  --radius-sm:8px;
+  --radius:12px;
+  --radius-lg:16px;
+  --space-xs:4px; --space-sm:8px; --space-md:16px; --space-lg:24px; --space-xl:32px;
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --dur:180ms;
+  --font:'Inter',system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{overflow-x:clip}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--font);
+  font-size:14px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:var(--font);cursor:pointer;border:none;background:none;color:inherit}
+button:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:var(--radius-sm)}
+
+/* ---------- layout: nav horizontal ---------- */
+.app{min-height:100vh;display:flex;flex-direction:column}
+.topnav{
+  display:flex;align-items:center;gap:var(--space-lg);
+  padding:0 28px;height:60px;flex-shrink:0;
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:rgba(9,9,11,.85);backdrop-filter:blur(12px);z-index:40;
+}
+.logo{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo-mark{
+  width:30px;height:30px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--primary),var(--secondary));
+  display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:14px;color:#fff;
+}
+.logo-name{font-weight:700;font-size:15px;letter-spacing:-.01em}
+.nav-main{display:flex;align-items:center;gap:2px;height:100%}
+.nav-item{
+  display:flex;align-items:center;gap:8px;
+  padding:0 14px;height:100%;
+  color:var(--fg-muted);font-weight:600;font-size:13.5px;
+  position:relative;
+  transition:color var(--dur) var(--ease-out);
+}
+.nav-item:hover{color:var(--fg)}
+.nav-item.active{color:var(--fg)}
+.nav-item.active::after{
+  content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:2px;
+  background:var(--primary);border-radius:2px;
+}
+.nav-item .ico{width:17px;height:17px;flex-shrink:0}
+.nav-item .count{font-size:11px;background:var(--content2);color:var(--fg-muted);padding:1px 7px;border-radius:99px}
+.topbar-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
+.search{
+  display:flex;align-items:center;gap:8px;
+  background:var(--content1);border:1px solid var(--border);
+  border-radius:var(--radius);padding:7px 12px;min-width:240px;
+  color:var(--fg-faint);font-size:13px;
+}
+.kbd{font-size:10px;border:1px solid var(--border-strong);border-radius:5px;padding:1px 5px;margin-left:auto;color:var(--fg-faint)}
+.icon-btn{width:34px;height:34px;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--fg-muted);border:1px solid var(--border);transition:color var(--dur) var(--ease-out),border-color var(--dur) var(--ease-out)}
+.icon-btn:hover{color:var(--fg);border-color:var(--border-strong)}
+.avatar{width:32px;height:32px;border-radius:99px;background:linear-gradient(135deg,#f5a524,#f31260);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;flex-shrink:0}
+.content{padding:28px;max-width:1440px;width:100%;margin:0 auto}
+
+/* ---------- detalhe do produto ---------- */
+.prod-back{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--fg-muted);margin-bottom:16px;transition:color var(--dur) var(--ease-out)}
+.prod-back:hover{color:var(--fg)}
+.prod-header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:4px}
+.prod-icon{width:46px;height:46px;border-radius:13px;background:linear-gradient(135deg,var(--content2),var(--content3));display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.prod-title{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.prod-quickstats{margin-left:auto;display:flex;gap:24px}
+.prod-quickstats .qs{text-align:right}
+.prod-quickstats .qs-v{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+.prod-quickstats .qs-l{font-size:11px;color:var(--fg-faint)}
+.subtabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin:20px 0 24px;overflow-x:auto}
+.subtab{padding:10px 14px;font-size:13.5px;font-weight:600;color:var(--fg-muted);white-space:nowrap;position:relative;transition:color var(--dur) var(--ease-out)}
+.subtab:hover{color:var(--fg)}
+.subtab.active{color:var(--fg)}
+.subtab.active::after{content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:2px;background:var(--primary);border-radius:2px}
+.subview{display:none;animation:fadein .2s var(--ease-out)}
+.subview.active{display:block}
+.rtab-panel{display:none;animation:fadein .2s var(--ease-out)}
+.rtab-panel.active{display:block}
+
+/* ---------- gerador de ofertas ---------- */
+.gen-topbar{display:flex;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.gen-title{font-size:19px;font-weight:800;letter-spacing:-.02em}
+.gen-progress{flex:1;min-width:120px;max-width:260px;height:6px;background:var(--content2);border-radius:99px;overflow:hidden}
+.gen-progress > div{height:100%;background:linear-gradient(90deg,var(--primary),var(--secondary));border-radius:99px;transition:width .3s var(--ease-out)}
+.gen-layout{display:grid;grid-template-columns:250px 1fr 300px;gap:20px;align-items:start}
+.gen-steps{background:var(--content1);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;position:sticky;top:80px}
+.gen-step{display:flex;align-items:flex-start;gap:11px;padding:10px;border-radius:var(--radius);width:100%;text-align:left;transition:background var(--dur) var(--ease-out)}
+.gen-step:hover{background:var(--content2)}
+.gen-step.active{background:var(--primary-soft)}
+.gen-step .num{width:22px;height:22px;border-radius:99px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:var(--content2);color:var(--fg-muted)}
+.gen-step.done .num{background:var(--success);color:#052e16}
+.gen-step.active .num{background:var(--primary);color:#fff}
+.gen-step .lbl{font-size:13px;font-weight:600;line-height:1.3}
+.gen-step .lbl small{display:block;font-size:11px;font-weight:400;color:var(--fg-faint);margin-top:2px}
+.gen-step.active .lbl{color:var(--fg)}
+.gen-step:not(.active):not(.done) .lbl{color:var(--fg-muted)}
+.gen-stage{display:none;animation:fadein .2s var(--ease-out)}
+.gen-stage.active{display:block}
+.gen-context{position:sticky;top:80px;display:flex;flex-direction:column;gap:14px}
+.xray-row{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px}
+.xray-row:last-child{border-bottom:none}
+.xray-row .k{color:var(--fg-faint);width:74px;flex-shrink:0}
+.xray-row .v{color:var(--fg);font-weight:500}
+.gen-genbar{display:flex;align-items:center;gap:10px;background:var(--secondary-soft);border:1px solid rgba(147,83,211,.3);border-radius:var(--radius);padding:12px 14px;margin-bottom:18px;font-size:12.5px;color:#c184f7}
+.dropzone{border:1.5px dashed var(--border-strong);border-radius:var(--radius);padding:22px;text-align:center;color:var(--fg-faint);font-size:13px;transition:border-color var(--dur) var(--ease-out)}
+.dropzone:hover{border-color:var(--primary)}
+.gen-actions{display:flex;justify-content:space-between;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid var(--border)}
+.copy-block{background:var(--content2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px}
+.copy-block .role{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-faint);margin-bottom:6px}
+.copy-block p{font-size:13.5px;line-height:1.55}
+.copy-block h4{font-size:16px;font-weight:800;letter-spacing:-.01em;margin-bottom:4px}
+.stack-item{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;background:var(--content2)}
+.stack-item .si-icon{width:34px;height:34px;border-radius:9px;background:var(--content3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.stack-item .si-price{margin-left:auto;text-align:right;flex-shrink:0}
+@media (max-width:1100px){
+  .gen-layout{grid-template-columns:1fr}
+  .gen-steps{position:static;display:flex;overflow-x:auto;gap:4px}
+  .gen-step{min-width:190px}
+  .gen-context{position:static}
+}
+.spark{display:block}
+.scale-dots{display:inline-flex;gap:3px}
+.scale-dots i{width:6px;height:12px;border-radius:2px;background:var(--content3)}
+.scale-dots i.on{background:var(--success)}
+.scale-dots i.mid{background:var(--warning)}
+
+/* ---------- components ---------- */
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:9px 16px;border-radius:var(--radius);
+  font-weight:600;font-size:13.5px;
+  transition:transform var(--dur) var(--ease-out),background var(--dur) var(--ease-out),opacity var(--dur) var(--ease-out);
+}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:#338ef7}
+.btn-flat{background:var(--content2);color:var(--fg)}
+.btn-flat:hover{background:var(--content3)}
+.btn-ghost{color:var(--fg-muted);border:1px solid var(--border)}
+.btn-ghost:hover{color:var(--fg);border-color:var(--border-strong)}
+.btn-sm{padding:6px 12px;font-size:12.5px;border-radius:var(--radius-sm)}
+
+.card{
+  background:var(--content1);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:var(--space-lg);
+}
+.card-title{font-size:15px;font-weight:700;letter-spacing:-.01em}
+.card-sub{font-size:12.5px;color:var(--fg-muted);margin-top:2px}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
+
+.chip{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:11.5px;font-weight:600;
+  padding:3px 10px;border-radius:99px;
+}
+.chip .dot{width:6px;height:6px;border-radius:99px;background:currentColor}
+.chip-success{background:var(--success-soft);color:var(--success)}
+.chip-warning{background:var(--warning-soft);color:var(--warning)}
+.chip-danger{background:var(--danger-soft);color:var(--danger)}
+.chip-primary{background:var(--primary-soft);color:#66aaf9}
+.chip-secondary{background:var(--secondary-soft);color:#c184f7}
+.chip-default{background:var(--content2);color:var(--fg-muted)}
+
+.grid{display:grid;gap:var(--space-md)}
+.grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+
+.kpi{padding:20px}
+.kpi-label{font-size:12px;color:var(--fg-muted);font-weight:500;display:flex;align-items:center;gap:8px}
+.kpi-value{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-top:6px;font-variant-numeric:tabular-nums}
+.kpi-delta{font-size:12px;margin-top:4px;font-weight:600}
+.kpi-delta.up{color:var(--success)}
+.kpi-delta.down{color:var(--danger)}
+.kpi-delta span{color:var(--fg-faint);font-weight:400}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--fg-faint);padding:10px 12px;border-bottom:1px solid var(--border)}
+td{padding:12px;border-bottom:1px solid var(--border);vertical-align:middle;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+tbody tr{transition:background var(--dur) var(--ease-out)}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+.td-main{font-weight:600;color:var(--fg)}
+.td-sub{font-size:11.5px;color:var(--fg-faint);display:block}
+
+.progress{height:6px;background:var(--content2);border-radius:99px;overflow:hidden}
+.progress > div{height:100%;border-radius:99px;background:var(--primary)}
+
+.tabs{display:flex;gap:4px;background:var(--content1);border:1px solid var(--border);border-radius:var(--radius);padding:4px;width:fit-content}
+.tab{padding:7px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:var(--fg-muted)}
+.tab:hover{color:var(--fg)}
+.tab.active{background:var(--content3);color:var(--fg)}
+
+.page-title{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.page-sub{color:var(--fg-muted);font-size:13.5px;margin-top:4px}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap}
+
+.view{display:none;animation:fadein .25s var(--ease-out)}
+.view.active{display:block}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
+
+/* kanban */
+.kanban{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;align-items:start}
+.kanban-col{background:var(--content1);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px;min-height:120px}
+.kanban-col-head{display:flex;align-items:center;gap:8px;padding:4px 6px 12px;font-size:12.5px;font-weight:700}
+.kanban-col-head .n{margin-left:auto;font-size:11px;color:var(--fg-faint);font-weight:500}
+.kcard{background:var(--content2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:10px;transition:border-color var(--dur) var(--ease-out),transform var(--dur) var(--ease-out)}
+.kcard:hover{border-color:var(--border-strong);transform:translateY(-1px)}
+.kcard:last-child{margin-bottom:0}
+.kcard-title{font-weight:600;font-size:13px}
+.kcard-meta{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.kcard-foot{display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:11px;color:var(--fg-faint)}
+
+/* funil */
+.funnel-flow{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding-bottom:8px}
+.fstep{min-width:150px;flex:1}
+.fstep-box{background:var(--content2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;height:100%;transition:border-color var(--dur) var(--ease-out)}
+.fstep-box:hover{border-color:var(--primary)}
+.fstep-type{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-faint)}
+.fstep-name{font-weight:700;font-size:13px;margin-top:4px}
+.fstep-stat{font-size:11.5px;color:var(--fg-muted);margin-top:8px}
+.fstep-stat b{color:var(--fg);font-variant-numeric:tabular-nums}
+.farrow{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 6px;min-width:64px}
+.farrow .pct{font-size:11px;font-weight:700;color:var(--success);font-variant-numeric:tabular-nums}
+.farrow svg{color:var(--content3)}
+
+/* radar score */
+.score-ring{position:relative;width:52px;height:52px;flex-shrink:0}
+.score-ring svg{transform:rotate(-90deg)}
+.score-ring .val{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+
+/* modal wizard */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-backdrop.open{display:flex}
+.modal{background:var(--content1);border:1px solid var(--border-strong);border-radius:20px;width:100%;max-width:640px;max-height:88vh;overflow-y:auto;padding:28px}
+.wizard-steps{display:flex;gap:8px;margin:18px 0 24px}
+.wstep{flex:1;height:4px;border-radius:99px;background:var(--content2)}
+.wstep.done{background:var(--primary)}
+.field label{font-size:12.5px;font-weight:600;color:var(--fg-muted);display:block;margin-bottom:6px}
+.field input,.field select,.field textarea{
+  width:100%;background:var(--content2);border:1px solid var(--border);
+  border-radius:var(--radius);padding:10px 12px;color:var(--fg);
+  font-family:var(--font);font-size:13.5px;
+}
+.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--primary);outline-offset:0;border-color:transparent}
+.field{margin-bottom:16px}
+
+/* creative cards */
+.creative{overflow:hidden;padding:0}
+.creative-thumb{aspect-ratio:1/1;background:linear-gradient(160deg,var(--content2),var(--content3));display:flex;align-items:center;justify-content:center;color:var(--fg-faint);font-size:12px;font-weight:600;position:relative}
+.creative-thumb .fmt{position:absolute;top:10px;left:10px}
+.creative-body{padding:14px}
+
+/* integração */
+.int-card{display:flex;align-items:center;gap:14px}
+.int-logo{width:42px;height:42px;border-radius:12px;background:var(--content2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0}
+
+/* barras de gráfico simples */
+.bars{display:flex;align-items:flex-end;gap:6px;height:120px}
+.bars .bar{flex:1;background:var(--primary-soft);border-radius:6px 6px 0 0;position:relative;transition:background var(--dur) var(--ease-out)}
+.bars .bar:hover{background:var(--primary)}
+.bars .bar.hi{background:var(--primary)}
+.bar-labels{display:flex;gap:6px;margin-top:8px}
+.bar-labels span{flex:1;text-align:center;font-size:10px;color:var(--fg-faint)}
+
+.list-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+.list-row:last-child{border-bottom:none}
+
+.empty-hint{border:1px dashed var(--border-strong);border-radius:var(--radius-lg);padding:20px;text-align:center;color:var(--fg-faint);font-size:13px}
+
+/* responsivo */
+@media (max-width:1100px){
+  .grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kanban{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid-3{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:768px){
+  .grid-2,.grid-3,.grid-4{grid-template-columns:1fr}
+  .kanban{grid-template-columns:1fr}
+  .content{padding:16px}
+  .search{display:none}
+  .topnav{gap:var(--space-md);padding:0 16px}
+  .nav-item{padding:0 10px}
+  .nav-item .count{display:none}
+  .logo-name{display:none}
+  .prod-quickstats{margin-left:0;width:100%;justify-content:space-between;gap:12px}
+  h1,h2,.page-title,.prod-title{overflow-wrap:anywhere;min-width:0}
+}
+@media (max-width:520px){
+  .nav-item span:not(.count){display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ============ NAV HORIZONTAL ============ -->
+<header class="topnav">
+  <div class="logo">
+    <div class="logo-mark">F</div>
+    <span class="logo-name">Forja OS</span>
+  </div>
+
+  <nav class="nav-main">
+    <button class="nav-item active" data-view="dashboard">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+      <span>Visão geral</span>
+    </button>
+    <button class="nav-item" data-view="radar">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12l6-6"/></svg>
+      <span>Radar</span> <span class="count">8</span>
+    </button>
+    <button class="nav-item" data-view="produtos">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>
+      <span>Produtos</span> <span class="count">6</span>
+    </button>
+  </nav>
+
+  <div class="topbar-actions">
+    <div class="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      Buscar produto, funil, campanha…
+      <span class="kbd">⌘K</span>
+    </div>
+    <button class="icon-btn" data-view="integracoes" aria-label="Integrações e configurações" title="Integrações">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <button class="avatar" title="Guilherme · Admin">G</button>
+  </div>
+</header>
+
+<main class="content">
+
+  <!-- ============ VIEW: DASHBOARD ============ -->
+  <section class="view active" id="view-dashboard">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Visão geral</h1>
+        <p class="page-sub">Todos os produtos, todos os mercados, um só painel.</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-flat btn-sm">Exportar relatório</button>
+        <button class="btn btn-primary btn-sm" onclick="openWizard()">+ Novo produto</button>
+      </div>
+    </div>
+
+    <div class="grid grid-4" style="margin-bottom:16px">
+      <div class="card kpi">
+        <div class="kpi-label">Receita líquida (30d)</div>
+        <div class="kpi-value">R$ 48.230</div>
+        <div class="kpi-delta up">↑ 12,4% <span>vs. período anterior</span></div>
+      </div>
+      <div class="card kpi">
+        <div class="kpi-label">Investimento em tráfego</div>
+        <div class="kpi-value">R$ 19.870</div>
+        <div class="kpi-delta up">ROAS 2.43 <span>· blended</span></div>
+      </div>
+      <div class="card kpi">
+        <div class="kpi-label">Vendas (30d)</div>
+        <div class="kpi-value">1.842</div>
+        <div class="kpi-delta up">↑ 8,1% <span>· ticket médio R$ 26,19</span></div>
+      </div>
+      <div class="card kpi">
+        <div class="kpi-label">Produtos ativos</div>
+        <div class="kpi-value">3 <span style="font-size:14px;color:var(--fg-faint);font-weight:500">/ 6 no pipeline</span></div>
+        <div class="kpi-delta"><span>2 em produção · 1 em validação</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+      <div style="font-size:13px;font-weight:700">Saldos disponíveis</div>
+      <div class="list-row" style="padding:0;border:none;gap:8px"><span class="chip chip-success" style="padding:1px 8px">Cakto</span><b>R$ 12.480</b><span style="color:var(--fg-faint);font-size:11px">+ R$ 8.320 a liberar</span></div>
+      <div class="list-row" style="padding:0;border:none;gap:8px"><span class="chip chip-primary" style="padding:1px 8px">Stripe</span><b>$ 3.104</b><span style="color:var(--fg-faint);font-size:11px">payout 17/07</span></div>
+      <div class="list-row" style="padding:0;border:none;gap:8px"><span class="chip chip-warning" style="padding:1px 8px">Hotmart</span><b>R$ 1.940</b><span style="color:var(--fg-faint);font-size:11px">+ R$ 2.210 a liberar</span></div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:10px"><span style="color:var(--fg-faint);font-size:12px">consolidado</span><b style="color:var(--success);font-size:16px">R$ 31.560</b><button class="icon-btn" data-view="integracoes" title="Configurar gateways" style="width:30px;height:30px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M4 6h16M4 18h16"/></svg></button></div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:2fr 1fr;margin-bottom:16px">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Receita por dia</div>
+            <div class="card-sub">Todos os gateways · convertido para BRL</div>
+          </div>
+          <div class="tabs"><button class="tab active">30d</button><button class="tab">90d</button><button class="tab">12m</button></div>
+        </div>
+        <div class="bars" id="revenue-bars"></div>
+        <div class="bar-labels"><span>17/06</span><span></span><span></span><span></span><span></span><span></span><span>24/06</span><span></span><span></span><span></span><span></span><span></span><span>01/07</span><span></span><span></span><span></span><span></span><span></span><span>08/07</span><span></span><span></span><span></span><span></span><span></span><span>15/07</span></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Receita por produto</div>
+            <div class="card-sub">Últimos 30 dias</div>
+          </div>
+        </div>
+        <div class="list-row">
+          <div style="flex:1;min-width:0">
+            <div class="td-main">Manual do Sono Profundo</div>
+            <div class="progress" style="margin-top:6px"><div style="width:58%"></div></div>
+          </div>
+          <b style="font-variant-numeric:tabular-nums">R$ 27.9k</b>
+        </div>
+        <div class="list-row">
+          <div style="flex:1;min-width:0">
+            <div class="td-main">Dog Training Blueprint</div>
+            <div class="progress" style="margin-top:6px"><div style="width:31%;background:var(--secondary)"></div></div>
+          </div>
+          <b style="font-variant-numeric:tabular-nums">R$ 15.1k</b>
+        </div>
+        <div class="list-row">
+          <div style="flex:1;min-width:0">
+            <div class="td-main">Recetas Keto Express</div>
+            <div class="progress" style="margin-top:6px"><div style="width:11%;background:var(--warning)"></div></div>
+          </div>
+          <b style="font-variant-numeric:tabular-nums">R$ 5.2k</b>
+        </div>
+        <div class="empty-hint" style="margin-top:14px">+ 3 produtos ainda sem receita — em pipeline</div>
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Alertas da operação</div>
+            <div class="card-sub">O que precisa da sua atenção agora</div>
+          </div>
+        </div>
+        <div class="list-row">
+          <span class="chip chip-danger"><span class="dot"></span>CPA alto</span>
+          <div style="flex:1">Campanha <b>Keto ES — Advantage+</b> com CPA 38% acima da meta há 2 dias</div>
+          <button class="btn btn-ghost btn-sm" onclick="openProduct();goSub('trafego')">Ver</button>
+        </div>
+        <div class="list-row">
+          <span class="chip chip-warning"><span class="dot"></span>Criativo</span>
+          <div style="flex:1"><b>Dog Blueprint</b> — melhor criativo com fadiga (frequência 4.2), gerar variações</div>
+          <button class="btn btn-ghost btn-sm" onclick="openProduct();goSub('criativos')">Ver</button>
+        </div>
+        <div class="list-row">
+          <span class="chip chip-primary"><span class="dot"></span>Financeiro</span>
+          <div style="flex:1">Saque disponível na <b>Cakto</b>: R$ 12.480 liberados hoje</div>
+          <button class="btn btn-ghost btn-sm" onclick="openProduct();goSub('financeiro')">Ver</button>
+        </div>
+        <div class="list-row">
+          <span class="chip chip-secondary"><span class="dot"></span>Pipeline</span>
+          <div style="flex:1"><b>Planner Financeiro 2027</b> parado em Produção há 6 dias</div>
+          <button class="btn btn-ghost btn-sm" data-view="produtos">Ver</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Fluxo guiado</div>
+            <div class="card-sub">Onde cada produto está na esteira Forja</div>
+          </div>
+          <button class="btn btn-flat btn-sm" data-view="produtos">Abrir pipeline</button>
+        </div>
+        <div class="list-row"><span class="chip chip-default">1 · Radar</span><div style="flex:1">Descoberta e validação de oportunidade</div><b>8 ideias</b></div>
+        <div class="list-row"><span class="chip chip-secondary">2 · Produto</span><div style="flex:1">Definição de oferta, ticket e mercado</div><b>2</b></div>
+        <div class="list-row"><span class="chip chip-warning">3 · Entregável</span><div style="flex:1">Produção de ebook, templates, vídeos</div><b>1</b></div>
+        <div class="list-row"><span class="chip chip-primary">4 · Funil + Criativos</span><div style="flex:1">LP, checkout, bumps, anúncios</div><b>1</b></div>
+        <div class="list-row"><span class="chip chip-success">5 · Escala</span><div style="flex:1">Tráfego pago + otimização contínua</div><b>3 ativos</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ VIEW: RADAR ============ -->
+  <section class="view" id="view-radar">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Radar</h1>
+        <p class="page-sub">Motor de mineração de ofertas e tendências. Descobre o que está escalando antes de você entrar.</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-flat btn-sm">Fontes ▾</button>
+        <button class="btn btn-primary btn-sm">+ Rastrear termo / concorrente</button>
+      </div>
+    </div>
+
+    <!-- sinais do motor -->
+    <div class="grid grid-4" style="margin-bottom:20px">
+      <div class="card kpi"><div class="kpi-label">Ofertas rastreadas</div><div class="kpi-value">1.284</div><div class="kpi-delta up">+63 <span>novas esta semana</span></div></div>
+      <div class="card kpi"><div class="kpi-label">Escalando agora</div><div class="kpi-value">47</div><div class="kpi-delta"><span>60+ dias no ar · alta veiculação</span></div></div>
+      <div class="card kpi"><div class="kpi-label">Termos em breakout</div><div class="kpi-value" style="color:var(--warning)">9</div><div class="kpi-delta"><span>crescimento &gt; 200% / 90d</span></div></div>
+      <div class="card kpi"><div class="kpi-label">Fontes ativas</div><div class="kpi-value">5</div><div class="kpi-delta"><span>Meta · TikTok · Trends · Hotmart · ClickBank</span></div></div>
+    </div>
+
+    <nav class="subtabs" data-tabs="radar">
+      <button class="subtab active" data-rtab="ofertas">Ofertas mineradas</button>
+      <button class="subtab" data-rtab="trends">Trends de termos</button>
+      <button class="subtab" data-rtab="shortlist">Shortlist pontuada <span class="count" style="margin-left:4px">6</span></button>
+    </nav>
+
+    <!-- RADAR TAB: ofertas mineradas -->
+    <div class="rtab-panel active" id="rtab-ofertas">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;align-items:center">
+        <div class="tabs">
+          <button class="tab active">Todos os mercados</button>
+          <button class="tab">🇧🇷 BR</button>
+          <button class="tab">🇺🇸 US</button>
+          <button class="tab">🇪🇸 ES</button>
+        </div>
+        <button class="btn btn-flat btn-sm">Nicho: todos ▾</button>
+        <button class="btn btn-flat btn-sm">Ordenar: dias no ar ▾</button>
+        <span style="margin-left:auto;color:var(--fg-faint);font-size:12px">Atualizado há 22 min</span>
+      </div>
+
+      <div class="card" style="padding:0">
+        <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Oferta / anunciante</th><th>Mercado</th><th>Nicho</th><th>Dias no ar</th><th>Anúncios ativos</th><th>Ticket est.</th><th>Ângulo dominante</th><th>Escala</th><th></th></tr></thead>
+          <tbody id="offers-body"></tbody>
+        </table>
+        </div>
+      </div>
+      <div class="empty-hint" style="margin-top:14px;text-align:left">
+        ✦ O motor cruza <b>longevidade do anúncio</b> (proxy de oferta vencedora), <b>volume de peças ativas</b> e <b>preço estimado</b> para destacar ofertas que valem engenharia reversa. "Dias no ar" alto + muitos anúncios = alguém está lucrando há tempo.
+      </div>
+    </div>
+
+    <!-- RADAR TAB: trends de termos -->
+    <div class="rtab-panel" id="rtab-trends">
+      <div class="grid" style="grid-template-columns:1fr 320px">
+        <div class="card" style="padding:0">
+          <div class="card-head" style="padding:20px 20px 0">
+            <div><div class="card-title">Termos monitorados</div><div class="card-sub">Volume de busca e velocidade de crescimento</div></div>
+            <div class="tabs"><button class="tab active">Todos</button><button class="tab">🇧🇷</button><button class="tab">🇺🇸</button></div>
+          </div>
+          <div style="overflow-x:auto">
+          <table style="margin-top:12px">
+            <thead><tr><th>Termo</th><th>Mercado</th><th>Tendência 12m</th><th>Crescimento</th><th>Volume/mês</th><th>Status</th></tr></thead>
+            <tbody id="trends-body"></tbody>
+          </table>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:4px">🔥 Em breakout</div>
+            <div class="card-sub" style="margin-bottom:14px">Aceleração súbita nos últimos 90 dias</div>
+            <div class="list-row" style="padding:9px 0"><div style="flex:1"><b>sleep divorce</b><span class="td-sub">🇺🇸 · +410%</span></div><span class="chip chip-warning">breakout</span></div>
+            <div class="list-row" style="padding:9px 0"><div style="flex:1"><b>ozempic caseiro natural</b><span class="td-sub">🇧🇷 · +320%</span></div><span class="chip chip-warning">breakout</span></div>
+            <div class="list-row" style="padding:9px 0"><div style="flex:1"><b>rutina montessori</b><span class="td-sub">🇪🇸 · +260%</span></div><span class="chip chip-warning">breakout</span></div>
+          </div>
+          <div class="card">
+            <div class="card-title" style="margin-bottom:4px">Sazonalidade</div>
+            <div class="card-sub" style="margin-bottom:14px">Janelas próximas</div>
+            <div class="list-row" style="padding:9px 0"><div style="flex:1"><b>planner 2027</b></div><span style="color:var(--fg-faint);font-size:12px">pico em nov–jan</span></div>
+            <div class="list-row" style="padding:9px 0"><div style="flex:1"><b>projeto verão</b></div><span style="color:var(--fg-faint);font-size:12px">pico set–dez (BR)</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RADAR TAB: shortlist pontuada -->
+    <div class="rtab-panel" id="rtab-shortlist">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;align-items:center">
+        <div class="tabs">
+          <button class="tab active">Todos os mercados</button>
+          <button class="tab">🇧🇷 BR</button>
+          <button class="tab">🇺🇸 US</button>
+          <button class="tab">🇪🇸 ES</button>
+        </div>
+        <span style="margin-left:auto;color:var(--fg-faint);font-size:12px">Oportunidades salvas da mineração + score</span>
+      </div>
+      <div class="grid grid-2" id="radar-grid"></div>
+    </div>
+  </section>
+
+  <!-- ============ VIEW: PRODUTOS ============ -->
+  <section class="view" id="view-produtos">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Pipeline de produtos</h1>
+        <p class="page-sub">Da ideia validada ao produto escalando. Arraste entre etapas.</p>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openWizard()">+ Novo produto</button>
+    </div>
+
+    <div class="kanban">
+      <div class="kanban-col">
+        <div class="kanban-col-head"><span class="chip chip-default" style="padding:2px 8px">Validação</span><span class="n">2</span></div>
+        <div class="kcard">
+          <div class="kcard-title">AI Prompts Vault</div>
+          <div class="kcard-meta"><span class="chip chip-default">🇺🇸 US</span><span class="chip chip-default">$14.90</span></div>
+          <div class="kcard-foot"><span>Teste de LP rodando · 412 visitas</span></div>
+        </div>
+        <div class="kcard">
+          <div class="kcard-title">Rotina Montessori em Casa</div>
+          <div class="kcard-meta"><span class="chip chip-default">🇧🇷 BR</span><span class="chip chip-default">R$ 29,90</span></div>
+          <div class="kcard-foot"><span>Pesquisa de audiência · 61 respostas</span></div>
+        </div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-head"><span class="chip chip-warning" style="padding:2px 8px">Produção</span><span class="n">1</span></div>
+        <div class="kcard">
+          <div class="kcard-title">Planner Financeiro 2027</div>
+          <div class="kcard-meta"><span class="chip chip-default">🇧🇷 BR</span><span class="chip chip-default">R$ 19,90</span><span class="chip chip-danger">parado 6d</span></div>
+          <div style="margin-top:10px"><div class="progress"><div style="width:64%;background:var(--warning)"></div></div></div>
+          <div class="kcard-foot"><span>Entregáveis 64%</span><span>7/11 assets</span></div>
+        </div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-head"><span class="chip chip-primary" style="padding:2px 8px">Funil</span><span class="n">1</span></div>
+        <div class="kcard">
+          <div class="kcard-title">Recetas Keto Express</div>
+          <div class="kcard-meta"><span class="chip chip-default">🇪🇸 ES</span><span class="chip chip-default">$9.90</span></div>
+          <div style="margin-top:10px"><div class="progress"><div style="width:85%"></div></div></div>
+          <div class="kcard-foot"><span>Funil 85% · falta upsell 2</span></div>
+        </div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-head"><span class="chip chip-secondary" style="padding:2px 8px">Lançamento</span><span class="n">0</span></div>
+        <div class="empty-hint">Nenhum produto em janela de lançamento</div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-head"><span class="chip chip-success" style="padding:2px 8px">Escalando</span><span class="n">2</span></div>
+        <div class="kcard">
+          <div class="kcard-title">Manual do Sono Profundo</div>
+          <div class="kcard-meta"><span class="chip chip-default">🇧🇷 BR</span><span class="chip chip-default">R$ 27</span><span class="chip chip-success">ROAS 2.8</span></div>
+          <div class="kcard-foot"><span>R$ 27.9k / 30d</span><span>1.034 vendas</span></div>
+        </div>
+        <div class="kcard">
+          <div class="kcard-title">Dog Training Blueprint</div>
+          <div class="kcard-meta"><span class="chip chip-default">🇺🇸 US</span><span class="chip chip-default">$17</span><span class="chip chip-success">ROAS 2.1</span></div>
+          <div class="kcard-foot"><span>R$ 15.1k / 30d</span><span>498 vendas</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Todos os produtos</div>
+          <div class="card-sub">Visão tabular com métricas consolidadas</div>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Produto</th><th>Mercado</th><th>Ticket</th><th>Etapa</th><th>Vendas 30d</th><th>Receita 30d</th><th>ROAS</th><th></th></tr></thead>
+        <tbody>
+          <tr><td class="td-main">Manual do Sono Profundo<span class="td-sub">Ebook + áudios · saúde</span></td><td>🇧🇷 BR</td><td>R$ 27,00</td><td><span class="chip chip-success">Escalando</span></td><td>1.034</td><td>R$ 27.918</td><td>2.8</td><td><button class="btn btn-ghost btn-sm">Abrir</button></td></tr>
+          <tr><td class="td-main">Dog Training Blueprint<span class="td-sub">Ebook + vídeos · pets</span></td><td>🇺🇸 US</td><td>$17.00</td><td><span class="chip chip-success">Escalando</span></td><td>498</td><td>R$ 15.134</td><td>2.1</td><td><button class="btn btn-ghost btn-sm">Abrir</button></td></tr>
+          <tr><td class="td-main">Recetas Keto Express<span class="td-sub">Ebook · nutrição</span></td><td>🇪🇸 ES</td><td>$9.90</td><td><span class="chip chip-primary">Funil</span></td><td>310</td><td>R$ 5.178</td><td>1.6</td><td><button class="btn btn-ghost btn-sm">Abrir</button></td></tr>
+          <tr><td class="td-main">Planner Financeiro 2027<span class="td-sub">Template Notion · finanças</span></td><td>🇧🇷 BR</td><td>R$ 19,90</td><td><span class="chip chip-warning">Produção</span></td><td>—</td><td>—</td><td>—</td><td><button class="btn btn-ghost btn-sm">Abrir</button></td></tr>
+          <tr><td class="td-main">AI Prompts Vault<span class="td-sub">Base Notion · produtividade</span></td><td>🇺🇸 US</td><td>$14.90</td><td><span class="chip chip-default">Validação</span></td><td>—</td><td>—</td><td>—</td><td><button class="btn btn-ghost btn-sm">Abrir</button></td></tr>
+          <tr><td class="td-main">Rotina Montessori em Casa<span class="td-sub">Ebook · maternidade</span></td><td>🇧🇷 BR</td><td>R$ 29,90</td><td><span class="chip chip-default">Validação</span></td><td>—</td><td>—</td><td>—</td><td><button class="btn btn-ghost btn-sm">Abrir</button></td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ VIEW: DETALHE DO PRODUTO ============ -->
+  <section class="view" id="view-produto">
+    <button class="prod-back" data-view="produtos">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      Produtos
+    </button>
+
+    <div class="prod-header">
+      <div class="prod-icon">🌙</div>
+      <div>
+        <div class="prod-title">Manual do Sono Profundo</div>
+        <div class="kcard-meta" style="margin-top:6px">
+          <span class="chip chip-default">🇧🇷 BR</span>
+          <span class="chip chip-default">R$ 27,00 · Cakto</span>
+          <span class="chip chip-success"><span class="dot"></span>Escalando</span>
+        </div>
+      </div>
+      <div class="prod-quickstats">
+        <div class="qs"><div class="qs-v">R$ 27.9k</div><div class="qs-l">receita 30d</div></div>
+        <div class="qs"><div class="qs-v">1.034</div><div class="qs-l">vendas 30d</div></div>
+        <div class="qs"><div class="qs-v" style="color:var(--success)">2.8</div><div class="qs-l">ROAS</div></div>
+      </div>
+    </div>
+
+    <nav class="subtabs">
+      <button class="subtab active" data-sub="overview">Visão geral</button>
+      <button class="subtab" data-sub="entregaveis">Entregáveis</button>
+      <button class="subtab" data-sub="criativos">Criativos</button>
+      <button class="subtab" data-sub="funis">Funis</button>
+      <button class="subtab" data-sub="trafego">Tráfego</button>
+      <button class="subtab" data-sub="financeiro">Financeiro</button>
+    </nav>
+
+    <!-- SUBVIEW: overview do produto -->
+    <div class="subview active" id="sub-overview">
+      <div class="grid grid-4" style="margin-bottom:16px">
+        <div class="card kpi"><div class="kpi-label">Margem 30d</div><div class="kpi-value" style="color:var(--success)">R$ 12.5k</div><div class="kpi-delta"><span>45% de margem</span></div></div>
+        <div class="card kpi"><div class="kpi-label">Ticket médio (funil)</div><div class="kpi-value">R$ 36,70</div><div class="kpi-delta"><span>com bump + upsell</span></div></div>
+        <div class="card kpi"><div class="kpi-label">Custo por venda</div><div class="kpi-value">R$ 13,10</div><div class="kpi-delta up">↓ 6% <span>vs. mês anterior</span></div></div>
+        <div class="card kpi"><div class="kpi-label">Etapa</div><div class="kpi-value" style="font-size:18px">Escalando</div><div class="kpi-delta"><span>há 42 dias</span></div></div>
+      </div>
+      <div class="grid" style="grid-template-columns:1fr 320px">
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-title">Situação do produto</div><div class="card-sub">Onde está cada frente</div></div>
+          </div>
+          <div class="list-row"><span class="chip chip-success">✓</span><div style="flex:1"><b>Entregáveis</b> — 11 de 11 assets concluídos</div><button class="btn btn-ghost btn-sm" data-sub="entregaveis">Abrir</button></div>
+          <div class="list-row"><span class="chip chip-warning">!</span><div style="flex:1"><b>Criativos</b> — 1 peça com fadiga (freq. 4.2), gerar variações</div><button class="btn btn-ghost btn-sm" data-sub="criativos">Abrir</button></div>
+          <div class="list-row"><span class="chip chip-warning">!</span><div style="flex:1"><b>Funil</b> — gargalo em LP → Checkout (18% vs. 24% mediana)</div><button class="btn btn-ghost btn-sm" data-sub="funis">Abrir</button></div>
+          <div class="list-row"><span class="chip chip-success">✓</span><div style="flex:1"><b>Tráfego</b> — 3 campanhas ativas, ROAS blended 2.8</div><button class="btn btn-ghost btn-sm" data-sub="trafego">Abrir</button></div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:4px">Briefing</div>
+          <div class="card-sub" style="margin-bottom:14px">Base para toda geração de IA</div>
+          <div class="list-row" style="padding:9px 0"><span style="color:var(--fg-faint);width:74px">Persona</span><b>Adultos 30–55, insônia</b></div>
+          <div class="list-row" style="padding:9px 0"><span style="color:var(--fg-faint);width:74px">Promessa</span><b>Dormir em 7 noites</b></div>
+          <div class="list-row" style="padding:9px 0"><span style="color:var(--fg-faint);width:74px">Formato</span><b>Ebook + áudios</b></div>
+          <div class="list-row" style="padding:9px 0"><span style="color:var(--fg-faint);width:74px">Oferta</span><b>27 + bump 9,90 + upsell 47</b></div>
+          <button class="btn btn-flat btn-sm" style="width:100%;justify-content:center;margin-top:12px">Editar briefing</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUBVIEW: entregaveis -->
+    <div class="subview" id="sub-entregaveis">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title" style="font-size:18px">Entregáveis</h2>
+        <p class="page-sub">Produção de assets deste produto — com geração assistida por IA.</p>
+      </div>
+      <button class="btn btn-primary btn-sm">✦ Gerar com IA</button>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1fr 340px">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Planner Financeiro 2027 — checklist de produção</div>
+            <div class="card-sub">7 de 11 assets concluídos · 64%</div>
+          </div>
+          <span class="chip chip-warning"><span class="dot"></span>Em produção</span>
+        </div>
+        <div class="progress" style="margin-bottom:18px"><div style="width:64%;background:var(--warning)"></div></div>
+
+        <div class="list-row"><span class="chip chip-success">✓</span><div style="flex:1"><b>Produto principal</b> — Template Notion completo<span class="td-sub">Aprovado · v3 final</span></div><button class="btn btn-ghost btn-sm">Ver</button></div>
+        <div class="list-row"><span class="chip chip-success">✓</span><div style="flex:1"><b>Bônus 1</b> — Planilha de dívidas (Google Sheets)<span class="td-sub">Aprovado</span></div><button class="btn btn-ghost btn-sm">Ver</button></div>
+        <div class="list-row"><span class="chip chip-success">✓</span><div style="flex:1"><b>Bônus 2</b> — Guia rápido de instalação (PDF, 12 pág.)<span class="td-sub">Aprovado</span></div><button class="btn btn-ghost btn-sm">Ver</button></div>
+        <div class="list-row"><span class="chip chip-success">✓</span><div style="flex:1"><b>Copy da LP</b> — headline, blocos, FAQ, garantia<span class="td-sub">Gerado com IA · revisado</span></div><button class="btn btn-ghost btn-sm">Ver</button></div>
+        <div class="list-row"><span class="chip chip-success">✓</span><div style="flex:1"><b>E-mails</b> — sequência de carrinho abandonado (4 e-mails)<span class="td-sub">Gerado com IA · revisado</span></div><button class="btn btn-ghost btn-sm">Ver</button></div>
+        <div class="list-row"><span class="chip chip-warning">…</span><div style="flex:1"><b>Vídeo de vendas (VSL)</b> — roteiro 4 min<span class="td-sub">Roteiro em revisão · falta locução</span></div><button class="btn btn-primary btn-sm">Continuar</button></div>
+        <div class="list-row"><span class="chip chip-warning">…</span><div style="flex:1"><b>Mockups 3D</b> — capa + dispositivos<span class="td-sub">2 de 5 prontos</span></div><button class="btn btn-primary btn-sm">Continuar</button></div>
+        <div class="list-row"><span class="chip chip-default">○</span><div style="flex:1"><b>Order bump</b> — mini-curso "Sair do vermelho em 30 dias"<span class="td-sub">Não iniciado</span></div><button class="btn btn-flat btn-sm">✦ Gerar</button></div>
+        <div class="list-row"><span class="chip chip-default">○</span><div style="flex:1"><b>Upsell</b> — Pack de planilhas avançadas R$ 47<span class="td-sub">Não iniciado</span></div><button class="btn btn-flat btn-sm">✦ Gerar</button></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="card">
+          <div class="card-title" style="margin-bottom:12px">✦ Assistente de produção</div>
+          <p style="font-size:12.5px;color:var(--fg-muted);margin-bottom:14px">A IA usa o briefing do produto (persona, promessa, ticket) para gerar rascunhos de qualquer asset do checklist.</p>
+          <div class="field"><label>Gerar agora</label>
+            <select><option>Roteiro do VSL (4 min)</option><option>Order bump — estrutura</option><option>Sequência de upsell</option></select>
+          </div>
+          <button class="btn btn-primary" style="width:100%;justify-content:center">Gerar rascunho</button>
+        </div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:12px">Briefing do produto</div>
+          <div class="list-row" style="padding:8px 0"><span style="color:var(--fg-faint);width:80px">Persona</span><b>Mulheres 28–45, endividadas, CLT</b></div>
+          <div class="list-row" style="padding:8px 0"><span style="color:var(--fg-faint);width:80px">Promessa</span><b>Organizar o mês em 20 min</b></div>
+          <div class="list-row" style="padding:8px 0"><span style="color:var(--fg-faint);width:80px">Ticket</span><b>R$ 19,90 + bump 9,90 + upsell 47</b></div>
+          <div class="list-row" style="padding:8px 0"><span style="color:var(--fg-faint);width:80px">Gateway</span><b>Cakto</b></div>
+        </div>
+      </div>
+    </div>
+    </div><!-- /sub-entregaveis -->
+
+    <!-- SUBVIEW: criativos -->
+    <div class="subview" id="sub-criativos">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title" style="font-size:18px">Criativos</h2>
+        <p class="page-sub">Biblioteca de anúncios deste produto, com performance por peça.</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-flat btn-sm">Filtrar: Todos ▾</button>
+        <button class="btn btn-primary btn-sm">+ Novo criativo</button>
+      </div>
+    </div>
+
+    <div class="tabs" style="margin-bottom:20px">
+      <button class="tab active">Veiculando (6)</button>
+      <button class="tab">Aprovados (3)</button>
+      <button class="tab">Rascunhos (3)</button>
+      <button class="tab">Pausados</button>
+    </div>
+
+    <div class="grid grid-4">
+      <div class="card creative">
+        <div class="creative-thumb"><span class="chip chip-default fmt">9:16 · vídeo</span>UGC — depoimento sono</div>
+        <div class="creative-body">
+          <div class="td-main">SONO-V07 · hook "3h da manhã"</div>
+          <div class="td-sub">Manual do Sono Profundo · Meta</div>
+          <div class="kcard-meta" style="margin-top:10px"><span class="chip chip-success">CTR 2.4%</span><span class="chip chip-default">Hook 38%</span></div>
+        </div>
+      </div>
+      <div class="card creative">
+        <div class="creative-thumb"><span class="chip chip-default fmt">9:16 · vídeo</span>UGC — rotina noturna</div>
+        <div class="creative-body">
+          <div class="td-main">SONO-V04 · hook "melatonina"</div>
+          <div class="td-sub">Manual do Sono Profundo · Meta</div>
+          <div class="kcard-meta" style="margin-top:10px"><span class="chip chip-warning">CTR 1.1%</span><span class="chip chip-danger">Freq 4.2</span></div>
+        </div>
+      </div>
+      <div class="card creative">
+        <div class="creative-thumb"><span class="chip chip-default fmt">1:1 · estático</span>Antes/depois planner</div>
+        <div class="creative-body">
+          <div class="td-main">DOG-E02 · "5 min per day"</div>
+          <div class="td-sub">Dog Training Blueprint · Meta</div>
+          <div class="kcard-meta" style="margin-top:10px"><span class="chip chip-success">CTR 1.9%</span><span class="chip chip-default">CPC $0.31</span></div>
+        </div>
+      </div>
+      <div class="card creative">
+        <div class="creative-thumb"><span class="chip chip-default fmt">9:16 · vídeo</span>Lipsync — receita 1</div>
+        <div class="creative-body">
+          <div class="td-main">KETO-V02 · "sin harinas"</div>
+          <div class="td-sub">Recetas Keto Express · TikTok</div>
+          <div class="kcard-meta" style="margin-top:10px"><span class="chip chip-warning">CTR 0.9%</span><span class="chip chip-default">Hook 24%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <div>
+          <div class="card-title">✦ Sugestões da IA</div>
+          <div class="card-sub">Baseadas na performance dos criativos ativos</div>
+        </div>
+      </div>
+      <div class="list-row"><span class="chip chip-primary">Variação</span><div style="flex:1">O hook <b>"3h da manhã"</b> tem o dobro do hook rate médio — gerar 3 variações do mesmo ângulo com cenas diferentes</div><button class="btn btn-flat btn-sm">✦ Gerar roteiros</button></div>
+      <div class="list-row"><span class="chip chip-danger">Fadiga</span><div style="flex:1"><b>SONO-V04</b> com frequência 4.2 e CTR caindo — pausar e substituir pela variação V07-b</div><button class="btn btn-flat btn-sm">Aplicar</button></div>
+      <div class="list-row"><span class="chip chip-secondary">Novo ângulo</span><div style="flex:1"><b>Keto ES</b> só tem ângulo de receita — testar ângulo de identidade ("vida sem harinas") no TikTok</div><button class="btn btn-flat btn-sm">✦ Gerar roteiros</button></div>
+    </div>
+    </div><!-- /sub-criativos -->
+
+    <!-- SUBVIEW: funis -->
+    <div class="subview" id="sub-funis">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title" style="font-size:18px">Funis de venda</h2>
+        <p class="page-sub">Estrutura da esteira deste produto, com conversão medida em cada passo.</p>
+      </div>
+      <button class="btn btn-primary btn-sm">+ Nova etapa</button>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Manual do Sono Profundo — funil principal</div>
+          <div class="card-sub">Últimos 30 dias · 41.2k visitas de anúncio</div>
+        </div>
+        <span class="chip chip-success"><span class="dot"></span>Publicado</span>
+      </div>
+      <div class="funnel-flow">
+        <div class="fstep"><div class="fstep-box">
+          <div class="fstep-type">Tráfego</div>
+          <div class="fstep-name">Anúncios Meta</div>
+          <div class="fstep-stat"><b>41.230</b> cliques<br>CPC <b>R$ 0,48</b></div>
+        </div></div>
+        <div class="farrow"><span class="pct">100%</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="fstep"><div class="fstep-box">
+          <div class="fstep-type">Pré-venda</div>
+          <div class="fstep-name">Advertorial</div>
+          <div class="fstep-stat"><b>41.230</b> visitas<br>Leitura 60%+: <b>44%</b></div>
+        </div></div>
+        <div class="farrow"><span class="pct">62%</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="fstep"><div class="fstep-box">
+          <div class="fstep-type">Oferta</div>
+          <div class="fstep-name">Landing page</div>
+          <div class="fstep-stat"><b>25.563</b> visitas<br>CTA click: <b>18%</b></div>
+        </div></div>
+        <div class="farrow"><span class="pct">18%</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="fstep"><div class="fstep-box" style="border-color:var(--primary)">
+          <div class="fstep-type">Checkout · Cakto</div>
+          <div class="fstep-name">R$ 27,00</div>
+          <div class="fstep-stat"><b>4.601</b> inícios<br>Conversão: <b>22,5%</b> · 1.034 vendas</div>
+        </div></div>
+        <div class="farrow"><span class="pct">41%</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="fstep"><div class="fstep-box">
+          <div class="fstep-type">Order bump</div>
+          <div class="fstep-name">Áudios binaurais · R$ 9,90</div>
+          <div class="fstep-stat">Take rate: <b>41%</b><br>424 aceites</div>
+        </div></div>
+        <div class="farrow"><span class="pct">12%</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="fstep"><div class="fstep-box">
+          <div class="fstep-type">Upsell 1-click</div>
+          <div class="fstep-name">Protocolo 21 dias · R$ 47</div>
+          <div class="fstep-stat">Take rate: <b>12%</b><br>124 aceites</div>
+        </div></div>
+      </div>
+      <div class="grid grid-4" style="margin-top:18px">
+        <div class="card kpi" style="background:var(--content2)"><div class="kpi-label">Ticket médio do funil</div><div class="kpi-value" style="font-size:20px">R$ 36,70</div></div>
+        <div class="card kpi" style="background:var(--content2)"><div class="kpi-label">Receita do funil (30d)</div><div class="kpi-value" style="font-size:20px">R$ 37.9k</div></div>
+        <div class="card kpi" style="background:var(--content2)"><div class="kpi-label">Custo por venda</div><div class="kpi-value" style="font-size:20px">R$ 13,10</div></div>
+        <div class="card kpi" style="background:var(--content2)"><div class="kpi-label">Margem por venda</div><div class="kpi-value" style="font-size:20px;color:var(--success)">R$ 21,40</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Gargalo detectado</div>
+          <div class="card-sub">Análise automática do funil</div>
+        </div>
+      </div>
+      <div class="list-row"><span class="chip chip-warning">LP → Checkout</span><div style="flex:1">CTA click de <b>18%</b> está abaixo da mediana dos seus funis BR (24%). Sugestão: testar seção de prova social acima da dobra e reduzir a LP em ~30%.</div><button class="btn btn-flat btn-sm">✦ Gerar variação da LP</button></div>
+    </div>
+    </div><!-- /sub-funis -->
+
+    <!-- SUBVIEW: trafego -->
+    <div class="subview" id="sub-trafego">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title" style="font-size:18px">Tráfego pago</h2>
+        <p class="page-sub">Campanhas deste produto em todas as plataformas, normalizadas.</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-flat btn-sm">Contas ▾</button>
+        <button class="btn btn-primary btn-sm">+ Nova campanha</button>
+      </div>
+    </div>
+
+    <div class="grid grid-4" style="margin-bottom:16px">
+      <div class="card kpi"><div class="kpi-label">Spend hoje</div><div class="kpi-value">R$ 742</div><div class="kpi-delta"><span>orçamento diário R$ 900</span></div></div>
+      <div class="card kpi"><div class="kpi-label">ROAS blended (7d)</div><div class="kpi-value">2.43</div><div class="kpi-delta up">↑ 0.21 <span>vs. semana anterior</span></div></div>
+      <div class="card kpi"><div class="kpi-label">CPA médio (7d)</div><div class="kpi-value">R$ 11,84</div><div class="kpi-delta up">↓ 6% <span>· meta R$ 13,50</span></div></div>
+      <div class="card kpi"><div class="kpi-label">Campanhas ativas</div><div class="kpi-value">7</div><div class="kpi-delta"><span>Meta 5 · TikTok 2</span></div></div>
+    </div>
+
+    <div class="card">
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Campanha</th><th>Plataforma</th><th>Produto</th><th>Status</th><th>Spend 7d</th><th>CPA</th><th>ROAS</th><th></th></tr></thead>
+        <tbody>
+          <tr><td class="td-main">Sono — Advantage+ BR<span class="td-sub">CBO · 6 criativos</span></td><td>Meta</td><td>Sono Profundo</td><td><span class="chip chip-success"><span class="dot"></span>Ativa</span></td><td>R$ 2.940</td><td>R$ 10,20</td><td><b style="color:var(--success)">2.9</b></td><td><button class="btn btn-ghost btn-sm">Gerenciar</button></td></tr>
+          <tr><td class="td-main">Sono — Remarketing<span class="td-sub">Advertorial 60%+</span></td><td>Meta</td><td>Sono Profundo</td><td><span class="chip chip-success"><span class="dot"></span>Ativa</span></td><td>R$ 480</td><td>R$ 6,90</td><td><b style="color:var(--success)">4.4</b></td><td><button class="btn btn-ghost btn-sm">Gerenciar</button></td></tr>
+          <tr><td class="td-main">Dog — Broad US<span class="td-sub">ABO · 4 criativos</span></td><td>Meta</td><td>Dog Blueprint</td><td><span class="chip chip-success"><span class="dot"></span>Ativa</span></td><td>$ 610</td><td>$ 7.80</td><td><b style="color:var(--success)">2.2</b></td><td><button class="btn btn-ghost btn-sm">Gerenciar</button></td></tr>
+          <tr><td class="td-main">Keto ES — Advantage+<span class="td-sub">CBO · 3 criativos</span></td><td>Meta</td><td>Keto Express</td><td><span class="chip chip-danger"><span class="dot"></span>CPA alto</span></td><td>$ 340</td><td>$ 9.40</td><td><b style="color:var(--danger)">1.1</b></td><td><button class="btn btn-ghost btn-sm">Gerenciar</button></td></tr>
+          <tr><td class="td-main">Keto ES — Spark Ads<span class="td-sub">2 criativos UGC</span></td><td>TikTok</td><td>Keto Express</td><td><span class="chip chip-success"><span class="dot"></span>Ativa</span></td><td>$ 180</td><td>$ 6.10</td><td><b style="color:var(--success)">1.8</b></td><td><button class="btn btn-ghost btn-sm">Gerenciar</button></td></tr>
+          <tr><td class="td-main">Sono — Teste hooks V07<span class="td-sub">ABO · budget teste</span></td><td>TikTok</td><td>Sono Profundo</td><td><span class="chip chip-warning"><span class="dot"></span>Aprendizado</span></td><td>R$ 210</td><td>R$ 14,70</td><td><b>1.9</b></td><td><button class="btn btn-ghost btn-sm">Gerenciar</button></td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Regras automáticas</div>
+          <div class="card-sub">Executadas pelo motor de automação (n8n / worker)</div>
+        </div>
+        <button class="btn btn-flat btn-sm">+ Nova regra</button>
+      </div>
+      <div class="list-row"><span class="chip chip-success">Ativa</span><div style="flex:1">Pausar conjunto se <b>CPA &gt; 1.4× meta</b> por 2 dias consecutivos</div><span style="color:var(--fg-faint);font-size:12px">disparou 2× este mês</span></div>
+      <div class="list-row"><span class="chip chip-success">Ativa</span><div style="flex:1">Escalar +20% de budget se <b>ROAS &gt; 2.5</b> por 3 dias</div><span style="color:var(--fg-faint);font-size:12px">disparou 5× este mês</span></div>
+      <div class="list-row"><span class="chip chip-default">Pausada</span><div style="flex:1">Notificar no Telegram quando frequência do criativo <b>&gt; 3.5</b></div><span style="color:var(--fg-faint);font-size:12px">—</span></div>
+    </div>
+    </div><!-- /sub-trafego -->
+
+    <!-- SUBVIEW: financeiro (escopo do produto) -->
+    <div class="subview" id="sub-financeiro">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title" style="font-size:18px">Financeiro do produto</h2>
+        <p class="page-sub">Receita, taxas e margem deste produto. O saldo consolidado do estúdio fica na Visão geral.</p>
+      </div>
+      <button class="btn btn-flat btn-sm">Exportar CSV</button>
+    </div>
+
+    <div class="grid grid-4" style="margin-bottom:16px">
+      <div class="card kpi"><div class="kpi-label">Receita 30d</div><div class="kpi-value">R$ 27.918</div><div class="kpi-delta up">↑ 12% <span>1.034 vendas</span></div></div>
+      <div class="card kpi"><div class="kpi-label">Taxas de gateway</div><div class="kpi-value">− R$ 1.787</div><div class="kpi-delta"><span>6,4% · Cakto</span></div></div>
+      <div class="card kpi"><div class="kpi-label">Investido em tráfego</div><div class="kpi-value">− R$ 13.560</div><div class="kpi-delta"><span>ROAS 2.8</span></div></div>
+      <div class="card kpi"><div class="kpi-label">Margem 30d</div><div class="kpi-value" style="color:var(--success)">R$ 12.571</div><div class="kpi-delta"><span>45% de margem</span></div></div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:2fr 1fr">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Transações deste produto</div>
+            <div class="card-sub">Webhooks em tempo real · Cakto</div>
+          </div>
+          <div class="tabs"><button class="tab active">Todas</button><button class="tab">Aprovadas</button><button class="tab">Reembolsos</button></div>
+        </div>
+        <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Horário</th><th>Oferta</th><th>Método</th><th>Valor</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>14:32</td><td class="td-main">Principal + bump</td><td>Pix</td><td>R$ 36,90</td><td><span class="chip chip-success">Aprovada</span></td></tr>
+            <tr><td>14:21</td><td class="td-main">Principal</td><td>Card 2×</td><td>R$ 27,00</td><td><span class="chip chip-success">Aprovada</span></td></tr>
+            <tr><td>13:58</td><td class="td-main">Principal + upsell</td><td>Pix</td><td>R$ 74,00</td><td><span class="chip chip-success">Aprovada</span></td></tr>
+            <tr><td>13:31</td><td class="td-main">Principal</td><td>Boleto</td><td>R$ 27,00</td><td><span class="chip chip-warning">Aguardando</span></td></tr>
+            <tr><td>12:47</td><td class="td-main">Principal + bump</td><td>Card</td><td>R$ 36,90</td><td><span class="chip chip-danger">Reembolso</span></td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:4px">Saúde da operação</div>
+        <div class="card-sub" style="margin-bottom:14px">Últimos 30 dias · este produto</div>
+        <div class="list-row"><div style="flex:1">Taxa de aprovação (card)</div><b style="color:var(--success)">88,4%</b></div>
+        <div class="list-row"><div style="flex:1">Reembolsos</div><b>1,6%</b></div>
+        <div class="list-row"><div style="flex:1">Chargebacks</div><b style="color:var(--success)">0,2%</b></div>
+        <div class="list-row"><div style="flex:1">Pix não pagos</div><b style="color:var(--warning)">29%</b></div>
+        <div class="list-row"><div style="flex:1">Take rate do bump</div><b>41%</b></div>
+      </div>
+    </div>
+    </div><!-- /sub-financeiro -->
+
+    </section><!-- /view-produto -->
+
+  <!-- ============ VIEW: GERADOR DE OFERTAS ============ -->
+  <section class="view" id="view-gerador">
+    <div class="gen-topbar">
+      <button class="prod-back" data-view="radar" style="margin:0">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+        Sair do gerador
+      </button>
+      <div class="gen-title">Gerador de ofertas</div>
+      <span class="chip chip-secondary">✦ modelando a partir de: SleepWell Method</span>
+      <div class="gen-progress" style="margin-left:auto"><div id="gen-bar" style="width:12%"></div></div>
+      <span id="gen-pct" style="font-size:12px;color:var(--fg-faint)">1 de 8</span>
+    </div>
+
+    <div class="gen-layout">
+      <!-- STEPPER -->
+      <nav class="gen-steps" id="gen-steps">
+        <button class="gen-step active" data-stage="0"><span class="num">1</span><span class="lbl">Oferta base<small>Ingestão + raio-x</small></span></button>
+        <button class="gen-step" data-stage="1"><span class="num">2</span><span class="lbl">Avatar & consciência<small>Para quem, dores</small></span></button>
+        <button class="gen-step" data-stage="2"><span class="num">3</span><span class="lbl">Grande ideia<small>Mecanismo único</small></span></button>
+        <button class="gen-step" data-stage="3"><span class="num">4</span><span class="lbl">Estrutura da oferta<small>Stack + preços</small></span></button>
+        <button class="gen-step" data-stage="4"><span class="num">5</span><span class="lbl">Página de vendas<small>Copy completa</small></span></button>
+        <button class="gen-step" data-stage="5"><span class="num">6</span><span class="lbl">Ângulos de criativo<small>Hooks + roteiros</small></span></button>
+        <button class="gen-step" data-stage="6"><span class="num">7</span><span class="lbl">E-mails<small>Sequências</small></span></button>
+        <button class="gen-step" data-stage="7"><span class="num">8</span><span class="lbl">Revisão & lançar<small>Virar produto</small></span></button>
+      </nav>
+
+      <!-- PALCO -->
+      <div id="gen-main">
+        <!-- Etapa 1 -->
+        <div class="gen-stage active" data-stage="0">
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Oferta base</div><div class="card-sub">Dê à IA tudo que você tem da oferta que quer modelar. Quanto mais contexto, melhor o modelo.</div></div></div>
+            <div class="field"><label>Link da página de vendas</label><input value="https://nordichealth.co/sleepwell-method" /></div>
+            <div class="grid grid-2">
+              <div class="field"><label>Mercado</label><select><option>🇺🇸 EUA</option><option>🇧🇷 Brasil</option><option>🇪🇸 Espanha / LATAM</option></select></div>
+              <div class="field"><label>Nicho</label><input value="Saúde / sono" /></div>
+            </div>
+            <div class="field"><label>Criativos de referência (links ou upload)</label>
+              <div class="dropzone">Arraste vídeos/imagens dos anúncios, ou cole links da Ad Library ✦<br><span style="font-size:11px">3 criativos adicionados da mineração</span></div>
+            </div>
+            <div class="field"><label>Anotações (opcional)</label><textarea rows="2" placeholder="Ex.: roda há 184 dias, ângulo de depoimento é o mais forte, ticket $27…">Roda há 184 dias · 37 anúncios ativos · ângulo dominante: depoimento "3h da manhã".</textarea></div>
+          </div>
+
+          <div class="card" style="margin-top:16px">
+            <div class="card-head"><div><div class="card-title">✦ Raio-x da oferta base</div><div class="card-sub">O que a IA extraiu da página e dos criativos</div></div><span class="chip chip-success"><span class="dot"></span>Analisado</span></div>
+            <div class="grid grid-2">
+              <div>
+                <div class="xray-row"><span class="k">Promessa</span><span class="v">Voltar a dormir a noite toda em 7 noites</span></div>
+                <div class="xray-row"><span class="k">Mecanismo</span><span class="v">"Reset do relógio circadiano" (3 passos)</span></div>
+                <div class="xray-row"><span class="k">Avatar</span><span class="v">Adultos 35–60 que acordam às 3h</span></div>
+                <div class="xray-row"><span class="k">Dor central</span><span class="v">Exaustão e névoa mental no dia seguinte</span></div>
+              </div>
+              <div>
+                <div class="xray-row"><span class="k">Oferta</span><span class="v">Ebook $27 + áudios + protocolo 21d</span></div>
+                <div class="xray-row"><span class="k">Garantia</span><span class="v">60 dias, incondicional</span></div>
+                <div class="xray-row"><span class="k">Prova</span><span class="v">Depoimentos + selo "método"</span></div>
+                <div class="xray-row"><span class="k">Ângulo forte</span><span class="v">Depoimento em 1ª pessoa</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Etapa 2 -->
+        <div class="gen-stage" data-stage="1">
+          <div class="gen-genbar">✦ Gerado a partir do raio-x da oferta base + mercado BR. Adaptado, não copiado.</div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Avatar & consciência</div><div class="card-sub">Para quem essa oferta fala</div></div><button class="btn btn-flat btn-sm">✦ Regenerar</button></div>
+            <div class="field"><label>Avatar principal</label><textarea rows="2">Homens e mulheres 38–58, CLT ou autônomos, que acordam de madrugada e não voltam a dormir — rendem menos no trabalho e estão cansados de "dicas soltas" que não funcionam.</textarea></div>
+            <div class="grid grid-2">
+              <div class="field"><label>Dores</label><textarea rows="4">• Acordar às 3–4h e ficar rolando na cama
+• Névoa mental e irritação no dia seguinte
+• Medo de depender de remédio pra dormir
+• Já tentou chá, melatonina, "higiene do sono" sem resultado</textarea></div>
+              <div class="field"><label>Desejos & objeções</label><textarea rows="4">Desejo: acordar disposto sem tarja preta.
+Objeção 1: "mais um método que não funciona"
+Objeção 2: "não tenho tempo"
+Nível de consciência: consciente do problema, cético da solução</textarea></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Etapa 3 -->
+        <div class="gen-stage" data-stage="2">
+          <div class="gen-genbar">✦ Construído sobre o avatar da etapa 2 + mecanismo da oferta base — diferenciado para não competir de igual.</div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Grande ideia & mecanismo único</div><div class="card-sub">O que faz sua oferta ser diferente, não só mais barata</div></div><button class="btn btn-flat btn-sm">✦ Regenerar</button></div>
+            <div class="copy-block"><div class="role">Grande ideia</div><h4>O problema não é o seu sono — é o seu "gatilho das 3h"</h4><p>Reposicionamento: em vez de "durma melhor", atacamos o despertar de madrugada como um gatilho específico e treinável, transformando um problema vago num inimigo nomeável.</p></div>
+            <div class="copy-block"><div class="role">Mecanismo único</div><h4>Protocolo Âncora do Sono™ — 3 âncoras noturnas</h4><p>Três micro-hábitos de 4 minutos (âncora sensorial, âncora respiratória, âncora de luz) que "reprogramam" o corpo para atravessar a madrugada. Nome próprio dá propriedade e diferencia da oferta base.</p></div>
+            <div class="field"><label>Promessa central</label><input value="Atravesse a madrugada sem acordar — em 7 noites, sem remédio" /></div>
+          </div>
+        </div>
+
+        <!-- Etapa 4 -->
+        <div class="gen-stage" data-stage="3">
+          <div class="gen-genbar">✦ Stack montado para maximizar ticket médio mantendo entrada low ticket, com base no benchmark da oferta base.</div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Estrutura da oferta</div><div class="card-sub">Produto principal + bump + upsell + garantia</div></div><button class="btn btn-flat btn-sm">✦ Regenerar</button></div>
+            <div class="stack-item"><div class="si-icon">📘</div><div style="flex:1"><div class="td-main">Principal — Protocolo Âncora do Sono</div><div class="td-sub">Ebook + 3 áudios guiados de âncora</div></div><div class="si-price"><b>R$ 27</b></div></div>
+            <div class="stack-item"><div class="si-icon">➕</div><div style="flex:1"><div class="td-main">Order bump — Trilhas binaurais 8h</div><div class="td-sub">Take rate esperado ~40%</div></div><div class="si-price"><b>R$ 9,90</b></div></div>
+            <div class="stack-item"><div class="si-icon">⬆️</div><div style="flex:1"><div class="td-main">Upsell — Programa 21 dias + comunidade</div><div class="td-sub">Acompanhamento e acountability</div></div><div class="si-price"><b>R$ 47</b></div></div>
+            <div class="stack-item" style="background:var(--content1);border-style:dashed"><div class="si-icon">🛡️</div><div style="flex:1"><div class="td-main">Garantia</div><div class="td-sub">7 noites de teste · reembolso incondicional em 30 dias</div></div></div>
+            <div class="grid grid-3" style="margin-top:6px">
+              <div class="card kpi" style="background:var(--content2)"><div class="kpi-label">Ticket de entrada</div><div class="kpi-value" style="font-size:18px">R$ 27</div></div>
+              <div class="card kpi" style="background:var(--content2)"><div class="kpi-label">Ticket médio projetado</div><div class="kpi-value" style="font-size:18px">R$ 36,70</div></div>
+              <div class="card kpi" style="background:var(--content2)"><div class="kpi-label">Máx. por cliente</div><div class="kpi-value" style="font-size:18px">R$ 83,90</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Etapa 5 -->
+        <div class="gen-stage" data-stage="4">
+          <div class="gen-genbar">✦ Copy escrita a partir da grande ideia (et. 3), avatar (et. 2) e stack (et. 4). Estrutura de carta de vendas.</div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Página de vendas</div><div class="card-sub">Blocos editáveis, prontos pro builder ou pro dev</div></div><div style="display:flex;gap:8px"><button class="btn btn-flat btn-sm">✦ Regenerar</button><button class="btn btn-primary btn-sm">Exportar copy</button></div></div>
+            <div class="copy-block"><div class="role">Headline</div><h4>O gatilho das 3h da manhã tem nome — e 4 minutos por noite bastam pra desligá-lo</h4></div>
+            <div class="copy-block"><div class="role">Lead / abertura</div><p>Se você acorda de madrugada e fica horas encarando o teto, o problema não é "dormir mal". É um gatilho específico que ninguém te ensinou a desarmar. Em 7 noites, o Protocolo Âncora do Sono treina seu corpo a atravessar a madrugada inteira…</p></div>
+            <div class="copy-block"><div class="role">Mecanismo</div><p>As 3 âncoras noturnas — sensorial, respiratória e de luz — funcionam como interruptores que sinalizam ao seu cérebro que a noite ainda não acabou…</p></div>
+            <div class="copy-block"><div class="role">Oferta + garantia + CTA</div><p>Você leva o protocolo completo, os 3 áudios guiados e a garantia de 7 noites por R$ 27. Se em 30 dias não dormir melhor, devolvemos cada centavo. <b>[Quero atravessar a madrugada →]</b></p></div>
+            <div class="empty-hint" style="text-align:left">+ blocos gerados: história, prova social, quebra de objeções, FAQ (6), garantia estendida. Todos editáveis.</div>
+          </div>
+        </div>
+
+        <!-- Etapa 6 -->
+        <div class="gen-stage" data-stage="5">
+          <div class="gen-genbar">✦ Ângulos derivados do avatar + o ângulo vencedor da oferta base (depoimento), com variações novas.</div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Ângulos de criativo</div><div class="card-sub">Hooks e roteiros prontos pra produção</div></div><button class="btn btn-primary btn-sm">✦ Gerar mais ângulos</button></div>
+            <div class="list-row"><span class="chip chip-secondary">Depoimento</span><div style="flex:1"><b>"Eram 3h07 quando percebi…"</b> — 1ª pessoa, mesmo ângulo que escala na oferta base<span class="td-sub">Roteiro 9:16 · 32s · hook nos 3 primeiros segundos</span></div><button class="btn btn-flat btn-sm">Ver roteiro</button></div>
+            <div class="list-row"><span class="chip chip-primary">Inimigo comum</span><div style="flex:1"><b>"O chá de camomila está te sabotando"</b> — mito vs. verdade<span class="td-sub">Roteiro 9:16 · 28s</span></div><button class="btn btn-flat btn-sm">Ver roteiro</button></div>
+            <div class="list-row"><span class="chip chip-warning">Demonstração</span><div style="flex:1"><b>"As 3 âncoras em 60 segundos"</b> — mostra o mecanismo<span class="td-sub">Roteiro 9:16 · 45s</span></div><button class="btn btn-flat btn-sm">Ver roteiro</button></div>
+            <div class="list-row"><span class="chip chip-success">Antes/depois</span><div style="flex:1"><b>"Como estavam minhas manhãs vs. agora"</b><span class="td-sub">Estático 1:1 · carrossel</span></div><button class="btn btn-flat btn-sm">Ver roteiro</button></div>
+            <div class="empty-hint" style="text-align:left">Roteiros já saem no formato do seu fluxo (Higgsfield / Magnific) para lipsync e voiceover.</div>
+          </div>
+        </div>
+
+        <!-- Etapa 7 -->
+        <div class="gen-stage" data-stage="6">
+          <div class="gen-genbar">✦ Sequências escritas na voz da oferta, cobrindo os momentos de maior perda de receita.</div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">E-mails & sequências</div><div class="card-sub">Recuperação e pós-venda</div></div><button class="btn btn-flat btn-sm">✦ Regenerar</button></div>
+            <div class="list-row"><span class="chip chip-danger">Carrinho</span><div style="flex:1"><b>Recuperação de carrinho</b> — 4 e-mails (imediato, 1h, 24h, 48h com bônus)<span class="td-sub">Gerado · pronto pra revisão</span></div><button class="btn btn-flat btn-sm">Abrir</button></div>
+            <div class="list-row"><span class="chip chip-primary">Pix</span><div style="flex:1"><b>Pix não pago</b> — 3 lembretes com urgência crescente<span class="td-sub">Gerado</span></div><button class="btn btn-flat btn-sm">Abrir</button></div>
+            <div class="list-row"><span class="chip chip-success">Pós-venda</span><div style="flex:1"><b>Onboarding</b> — entrega + "comece pela âncora 1" + pedido de depoimento<span class="td-sub">Gerado</span></div><button class="btn btn-flat btn-sm">Abrir</button></div>
+          </div>
+        </div>
+
+        <!-- Etapa 8 -->
+        <div class="gen-stage" data-stage="7">
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Revisão & lançar</div><div class="card-sub">Tudo que a oferta precisa está pronto</div></div><span class="chip chip-success"><span class="dot"></span>Pronta pra lançar</span></div>
+            <div class="list-row"><span class="chip chip-success">✓</span><div style="flex:1">Avatar, dores e consciência definidos</div></div>
+            <div class="list-row"><span class="chip chip-success">✓</span><div style="flex:1">Grande ideia + mecanismo único (Protocolo Âncora do Sono)</div></div>
+            <div class="list-row"><span class="chip chip-success">✓</span><div style="flex:1">Estrutura da oferta — principal + bump + upsell + garantia</div></div>
+            <div class="list-row"><span class="chip chip-success">✓</span><div style="flex:1">Copy da página de vendas (todos os blocos)</div></div>
+            <div class="list-row"><span class="chip chip-success">✓</span><div style="flex:1">4 ângulos de criativo com roteiros</div></div>
+            <div class="list-row"><span class="chip chip-success">✓</span><div style="flex:1">Sequências de e-mail (carrinho, pix, pós-venda)</div></div>
+            <div class="empty-hint" style="text-align:left;margin-top:14px">Ao criar o produto, tudo isto vira: entregáveis no checklist, esqueleto de funil e biblioteca de criativos — já preenchidos. Você entra na fase de produção, não do zero.</div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+              <button class="btn btn-flat">Salvar como rascunho</button>
+              <button class="btn btn-primary" onclick="goView('produtos')">Criar produto no pipeline →</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- navegação entre etapas -->
+        <div class="gen-actions">
+          <button class="btn btn-ghost" id="gen-prev">← Voltar</button>
+          <button class="btn btn-primary" id="gen-next">✦ Gerar e avançar →</button>
+        </div>
+      </div>
+
+      <!-- CONTEXTO PERSISTENTE -->
+      <aside class="gen-context">
+        <div class="card">
+          <div class="card-title" style="font-size:14px;margin-bottom:4px">Oferta base</div>
+          <div class="card-sub" style="margin-bottom:12px">A IA modela sempre a partir disto</div>
+          <div class="xray-row"><span class="k">Fonte</span><span class="v">SleepWell Method</span></div>
+          <div class="xray-row"><span class="k">Mercado</span><span class="v">🇺🇸 → 🇧🇷</span></div>
+          <div class="xray-row"><span class="k">Dias no ar</span><span class="v">184 · vencedora</span></div>
+          <div class="xray-row"><span class="k">Ticket</span><span class="v">$27</span></div>
+          <div class="xray-row"><span class="k">Ângulo</span><span class="v">Depoimento 1ª pessoa</span></div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="font-size:14px;margin-bottom:10px">Contexto acumulado</div>
+          <div class="list-row" style="padding:6px 0;border:none;gap:8px"><span class="chip chip-success" style="padding:1px 7px">✓</span><span style="font-size:12.5px">Raio-x extraído</span></div>
+          <div class="list-row" style="padding:6px 0;border:none;gap:8px" id="ctx-avatar"><span class="chip chip-default" style="padding:1px 7px">○</span><span style="font-size:12.5px;color:var(--fg-faint)">Avatar</span></div>
+          <div class="list-row" style="padding:6px 0;border:none;gap:8px" id="ctx-ideia"><span class="chip chip-default" style="padding:1px 7px">○</span><span style="font-size:12.5px;color:var(--fg-faint)">Grande ideia</span></div>
+          <div class="list-row" style="padding:6px 0;border:none;gap:8px" id="ctx-stack"><span class="chip chip-default" style="padding:1px 7px">○</span><span style="font-size:12.5px;color:var(--fg-faint)">Estrutura</span></div>
+          <p style="font-size:11.5px;color:var(--fg-faint);margin-top:10px;line-height:1.5">Cada etapa alimenta a próxima: o avatar usa o raio-x, a copy usa o avatar e a grande ideia, e assim por diante.</p>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ VIEW: INTEGRAÇÕES ============ -->
+  <section class="view" id="view-integracoes">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Integrações</h1>
+        <p class="page-sub">Conexões de API que alimentam o painel. Chaves gerenciadas via Infisical.</p>
+      </div>
+      <button class="btn btn-primary btn-sm">+ Conectar serviço</button>
+    </div>
+
+    <div class="nav-section" style="padding-left:0">Pagamentos</div>
+    <div class="grid grid-3" style="margin-bottom:24px">
+      <div class="card int-card"><div class="int-logo">C</div><div style="flex:1"><div class="td-main">Cakto</div><div class="td-sub">Webhooks + API de saldo</div></div><span class="chip chip-success"><span class="dot"></span>Conectado</span></div>
+      <div class="card int-card"><div class="int-logo">S</div><div style="flex:1"><div class="td-main">Stripe</div><div class="td-sub">Payments + Payouts API</div></div><span class="chip chip-success"><span class="dot"></span>Conectado</span></div>
+      <div class="card int-card"><div class="int-logo">H</div><div style="flex:1"><div class="td-main">Hotmart</div><div class="td-sub">Webhooks + API</div></div><span class="chip chip-success"><span class="dot"></span>Conectado</span></div>
+      <div class="card int-card"><div class="int-logo">K</div><div style="flex:1"><div class="td-main">Kirvano</div><div class="td-sub">Webhooks</div></div><span class="chip chip-default">Conectar</span></div>
+      <div class="card int-card"><div class="int-logo">P</div><div style="flex:1"><div class="td-main">PayPal</div><div class="td-sub">Para mercados EU</div></div><span class="chip chip-default">Conectar</span></div>
+    </div>
+
+    <div class="nav-section" style="padding-left:0">Tráfego</div>
+    <div class="grid grid-3" style="margin-bottom:24px">
+      <div class="card int-card"><div class="int-logo">M</div><div style="flex:1"><div class="td-main">Meta Ads</div><div class="td-sub">Marketing API · 3 contas</div></div><span class="chip chip-success"><span class="dot"></span>Conectado</span></div>
+      <div class="card int-card"><div class="int-logo">T</div><div style="flex:1"><div class="td-main">TikTok Ads</div><div class="td-sub">Business API · 1 conta</div></div><span class="chip chip-success"><span class="dot"></span>Conectado</span></div>
+      <div class="card int-card"><div class="int-logo">G</div><div style="flex:1"><div class="td-main">Google Ads</div><div class="td-sub">Para YouTube + Search</div></div><span class="chip chip-default">Conectar</span></div>
+    </div>
+
+    <div class="nav-section" style="padding-left:0">Criação & automação</div>
+    <div class="grid grid-3">
+      <div class="card int-card"><div class="int-logo">A</div><div style="flex:1"><div class="td-main">Anthropic API</div><div class="td-sub">Copys, roteiros, análises</div></div><span class="chip chip-success"><span class="dot"></span>Conectado</span></div>
+      <div class="card int-card"><div class="int-logo">Hf</div><div style="flex:1"><div class="td-main">Higgsfield / Magnific</div><div class="td-sub">Criativos de vídeo e imagem</div></div><span class="chip chip-success"><span class="dot"></span>Conectado</span></div>
+      <div class="card int-card"><div class="int-logo">n8</div><div style="flex:1"><div class="td-main">n8n</div><div class="td-sub">Regras e automações</div></div><span class="chip chip-success"><span class="dot"></span>Conectado</span></div>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<!-- ============ WIZARD: NOVO PRODUTO ============ -->
+<div class="modal-backdrop" id="wizard" role="dialog" aria-modal="true" aria-label="Novo produto">
+  <div class="modal">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div class="card-title" style="font-size:17px">Novo produto</div>
+        <div class="card-sub">Fluxo guiado — do briefing ao funil pronto</div>
+      </div>
+      <button class="btn btn-flat btn-sm" onclick="closeWizard()" aria-label="Fechar">✕</button>
+    </div>
+    <div class="wizard-steps">
+      <div class="wstep done"></div><div class="wstep done"></div><div class="wstep"></div><div class="wstep"></div><div class="wstep"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+      <span class="chip chip-primary">1. Briefing</span>
+      <span class="chip chip-primary">2. Oferta</span>
+      <span class="chip chip-default">3. Entregáveis</span>
+      <span class="chip chip-default">4. Funil</span>
+      <span class="chip chip-default">5. Campanha</span>
+    </div>
+
+    <div class="field"><label>Nome do produto</label><input value="Rotina Montessori em Casa" /></div>
+    <div class="grid grid-2">
+      <div class="field"><label>Mercado</label><select><option>🇧🇷 Brasil</option><option>🇺🇸 EUA</option><option>🇪🇸 Espanha / LATAM</option></select></div>
+      <div class="field"><label>Ticket principal</label><input value="R$ 29,90" /></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="field"><label>Gateway</label><select><option>Cakto</option><option>Stripe</option><option>Hotmart</option><option>Kirvano</option></select></div>
+      <div class="field"><label>Origem</label><select><option>Radar — oportunidade #04</option><option>Ideia manual</option></select></div>
+    </div>
+    <div class="field"><label>Promessa central (a IA usa isso em tudo: copy, criativos, e-mails)</label><textarea rows="2">Implantar a rotina Montessori em casa em 7 dias, sem comprar móveis caros.</textarea></div>
+
+    <div class="empty-hint" style="text-align:left;margin-bottom:20px">
+      ✦ Ao avançar, a IA gera automaticamente: estrutura de entregáveis sugerida, esqueleto do funil (LP + bump + upsell) e 5 ângulos de criativo — tudo editável antes de publicar.
+    </div>
+
+    <div style="display:flex;justify-content:space-between">
+      <button class="btn btn-ghost" onclick="closeWizard()">Salvar rascunho</button>
+      <button class="btn btn-primary">Avançar → Entregáveis</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- navegação entre views de topo ----
+const views = document.querySelectorAll('.view');
+function goView(v){
+  views.forEach(s=>s.classList.toggle('active', s.id==='view-'+v));
+  document.querySelectorAll('.nav-main .nav-item').forEach(n=>n.classList.toggle('active', n.dataset.view===v));
+  window.scrollTo({top:0});
+}
+document.querySelectorAll('[data-view]').forEach(el=>{
+  el.addEventListener('click',()=>goView(el.dataset.view));
+});
+
+// ---- abrir um produto (detalhe) ----
+function openProduct(){ goView('produto'); goSub('overview'); }
+// botões "Abrir" da tabela e "Promover"/cards do kanban levam ao detalhe
+document.querySelectorAll('#view-produtos .kcard, #view-produtos tbody tr').forEach(el=>{
+  el.style.cursor='pointer';
+  el.addEventListener('click',e=>{ if(e.target.closest('button'))return; openProduct(); });
+});
+document.querySelectorAll('#view-produtos tbody .btn, #view-produtos .kanban .btn').forEach(b=>{
+  b.addEventListener('click',e=>{e.stopPropagation();openProduct();});
+});
+
+// ---- abas internas do produto ----
+function goSub(s){
+  document.querySelectorAll('#view-produto .subview').forEach(p=>p.classList.toggle('active', p.id==='sub-'+s));
+  document.querySelectorAll('#view-produto .subtab').forEach(t=>t.classList.toggle('active', t.dataset.sub===s));
+  window.scrollTo({top:0});
+}
+document.querySelectorAll('[data-sub]').forEach(el=>{
+  el.addEventListener('click',()=>goSub(el.dataset.sub));
+});
+
+// ---- abas do radar ----
+function goRtab(t){
+  document.querySelectorAll('#view-radar .rtab-panel').forEach(p=>p.classList.toggle('active', p.id==='rtab-'+t));
+  document.querySelectorAll('#view-radar .subtab').forEach(s=>s.classList.toggle('active', s.dataset.rtab===t));
+}
+document.querySelectorAll('[data-rtab]').forEach(el=>el.addEventListener('click',()=>goRtab(el.dataset.rtab)));
+
+// ---- ofertas mineradas ----
+const offers=[
+  {name:'SleepWell Method',adv:'Nordic Health Co.',m:'🇺🇸',n:'saúde/sono',days:184,ads:37,tk:'$27',ang:'Depoimento — "3h da manhã"',scale:3},
+  {name:'Método Sono Restaurador',adv:'Dr. Paulo · afiliado',m:'🇧🇷',n:'saúde/sono',days:142,ads:24,tk:'R$ 27',ang:'Autoridade médica',scale:3},
+  {name:'Recetas Sin Harinas',adv:'Vida Keto ES',m:'🇪🇸',n:'nutrição',days:97,ads:41,tk:'$9,90',ang:'Identidade — "sin renunciar"',scale:3},
+  {name:'Dog Obedience 5-min',adv:'K9 Blueprint',m:'🇺🇸',n:'pets',days:210,ads:18,tk:'$17',ang:'Antes/depois',scale:2},
+  {name:'Planner Financeiro Notion',adv:'Organiza+ · afiliado',m:'🇧🇷',n:'finanças',days:64,ads:12,tk:'R$ 19,90',ang:'Sair do vermelho',scale:2},
+  {name:'Montessori en Casa',adv:'Crianza Consciente',m:'🇪🇸',n:'parentalidade',days:53,ads:15,tk:'$14,90',ang:'Rotina de 7 dias',scale:2},
+  {name:'AI Prompt Vault Pro',adv:'PromptStack',m:'🇺🇸',n:'produtividade',days:38,ads:9,tk:'$14,90',ang:'FOMO — "antes que fechem"',scale:1},
+  {name:'Amigurumi Kit Receitas',adv:'Ateliê da Bel',m:'🇧🇷',n:'artesanato',days:29,ads:6,tk:'R$ 19,90',ang:'Renda extra em casa',scale:1},
+];
+function dots(n){let h='<span class="scale-dots">';for(let i=0;i<3;i++)h+=`<i class="${i<n?(n>=3?'on':'mid'):''}"></i>`;return h+'</span>'}
+const ob=document.getElementById('offers-body');
+offers.forEach(o=>{
+  const hot = o.days>=120;
+  ob.insertAdjacentHTML('beforeend',`
+  <tr>
+    <td class="td-main">${o.name}<span class="td-sub">${o.adv}</span></td>
+    <td>${o.m}</td><td>${o.n}</td>
+    <td><b>${o.days}</b>${hot?' <span class="chip chip-success" style="padding:1px 7px">vencedora</span>':''}</td>
+    <td>${o.ads}</td><td>${o.tk}</td>
+    <td style="max-width:180px">${o.ang}</td>
+    <td>${dots(o.scale)}</td>
+    <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm">Ver anúncios</button> <button class="btn btn-primary btn-sm" onclick="openGenerator()">Modelar</button></td>
+  </tr>`);
+});
+
+// ---- trends de termos ----
+function spark(data,color){
+  const w=90,h=26,max=Math.max(...data),min=Math.min(...data);
+  const pts=data.map((v,i)=>`${(i/(data.length-1)*w).toFixed(1)},${(h-((v-min)/(max-min||1))*h).toFixed(1)}`).join(' ');
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+const trends=[
+  {t:'sleep divorce',m:'🇺🇸',d:[10,11,12,14,18,22,30,42,55,70,88,100],g:'+410%',st:'breakout'},
+  {t:'ozempic caseiro natural',m:'🇧🇷',d:[20,22,25,24,30,38,45,52,66,78,90,100],g:'+320%',st:'breakout'},
+  {t:'manual do sono',m:'🇧🇷',d:[60,64,62,70,68,74,78,80,85,88,92,96],g:'+58%',st:'rising'},
+  {t:'recetas keto express',m:'🇪🇸',d:[55,58,54,60,62,59,64,66,63,68,70,72],g:'+31%',st:'rising'},
+  {t:'dog training',m:'🇺🇸',d:[80,82,79,83,81,84,82,85,83,84,82,85],g:'+4%',st:'estável'},
+  {t:'planner financeiro',m:'🇧🇷',d:[70,50,40,45,55,60,58,52,48,62,80,95],g:'sazonal',st:'sazonal'},
+  {t:'projeto verão',m:'🇧🇷',d:[95,80,55,35,25,20,22,28,40,60,82,92],g:'declínio',st:'declínio'},
+];
+const stChip={breakout:'chip-warning',rising:'chip-success','estável':'chip-default','sazonal':'chip-primary','declínio':'chip-danger'};
+const stColor={breakout:'var(--warning)',rising:'var(--success)','estável':'var(--fg-faint)','sazonal':'#66aaf9','declínio':'var(--danger)'};
+const tb=document.getElementById('trends-body');
+trends.forEach(o=>{
+  tb.insertAdjacentHTML('beforeend',`
+  <tr>
+    <td class="td-main">${o.t}</td><td>${o.m}</td>
+    <td>${spark(o.d,stColor[o.st])}</td>
+    <td><b>${o.g}</b></td>
+    <td>${Math.round(o.d[11]*820).toLocaleString('pt-BR')}</td>
+    <td><span class="chip ${stChip[o.st]}">${o.st}</span></td>
+  </tr>`);
+});
+
+// ---- gerador de ofertas ----
+const genStages=8;
+let genCur=0;
+const genLabels=['Oferta base','Avatar & consciência','Grande ideia','Estrutura da oferta','Página de vendas','Ângulos de criativo','E-mails','Revisão & lançar'];
+function genRender(){
+  document.querySelectorAll('#gen-main .gen-stage').forEach(s=>s.classList.toggle('active', +s.dataset.stage===genCur));
+  document.querySelectorAll('#gen-steps .gen-step').forEach(s=>{
+    const i=+s.dataset.stage;
+    s.classList.toggle('active', i===genCur);
+    s.classList.toggle('done', i<genCur);
+  });
+  document.getElementById('gen-bar').style.width=Math.round((genCur+1)/genStages*100)+'%';
+  document.getElementById('gen-pct').textContent=(genCur+1)+' de '+genStages;
+  document.getElementById('gen-prev').style.visibility=genCur===0?'hidden':'visible';
+  const next=document.getElementById('gen-next');
+  next.textContent = genCur>=genStages-1 ? 'Concluído' : (genCur===0?'✦ Analisar e avançar →':'✦ Gerar e avançar →');
+  next.style.visibility = genCur>=genStages-1 ? 'hidden':'visible';
+  // marca contexto acumulado
+  const ctx=[['ctx-avatar',1],['ctx-ideia',2],['ctx-stack',3]];
+  ctx.forEach(([id,st])=>{
+    const el=document.getElementById(id); if(!el)return;
+    const on=genCur>=st;
+    el.querySelector('.chip').className='chip '+(on?'chip-success':'chip-default')+'';
+    el.querySelector('.chip').style.padding='1px 7px';
+    el.querySelector('.chip').textContent=on?'✓':'○';
+    el.querySelector('span:last-child').style.color=on?'var(--fg)':'var(--fg-faint)';
+  });
+  window.scrollTo({top:0});
+}
+function genGo(i){ genCur=Math.max(0,Math.min(genStages-1,i)); genRender(); }
+document.querySelectorAll('#gen-steps .gen-step').forEach(s=>s.addEventListener('click',()=>genGo(+s.dataset.stage)));
+document.getElementById('gen-prev').addEventListener('click',()=>genGo(genCur-1));
+document.getElementById('gen-next').addEventListener('click',()=>genGo(genCur+1));
+
+function openGenerator(){ genCur=0; goView('gerador'); genRender(); }
+
+// gráfico de barras (dados mock)
+const rev=[38,42,35,51,47,44,58,62,55,49,66,71,64,58,73,69,77,82,74,68,85,79,88,92,84,78,95,90,87,100];
+const bars=document.getElementById('revenue-bars');
+rev.forEach((v,i)=>{
+  const b=document.createElement('div');
+  b.className='bar'+(v>=88?' hi':'');
+  b.style.height=v+'%';
+  b.title='R$ '+(v*19).toLocaleString('pt-BR');
+  bars.appendChild(b);
+});
+
+// radar — cards com score ring
+const radarData=[
+  {t:'Sleep Optimization for Shift Workers',m:'🇺🇸 US',n:'saúde',score:87,d:'Demanda alta',c:'Concorrência média',mg:'Ticket $19–29',src:'Tendência de busca + 14 ofertas ativas espiadas'},
+  {t:'Rotina Montessori em Casa',m:'🇧🇷 BR',n:'maternidade',score:82,d:'Demanda alta',c:'Concorrência baixa',mg:'Ticket R$ 27–37',src:'Grupos de FB + anúncios com 60d+ de veiculação'},
+  {t:'Meal Prep para Diabéticos',m:'🇧🇷 BR',n:'nutrição',score:74,d:'Demanda média',c:'Concorrência baixa',mg:'Ticket R$ 19–29',src:'Termo em crescimento 8 meses seguidos'},
+  {t:'Ansiedad en Adolescentes — Guía Padres',m:'🇪🇸 ES',n:'parentalidade',score:71,d:'Demanda alta',c:'Concorrência alta',mg:'Ticket $9–17',src:'3 ofertas escalando na biblioteca de anúncios'},
+  {t:'Home Barista Starter Guide',m:'🇺🇸 US',n:'hobby',score:63,d:'Demanda média',c:'Concorrência média',mg:'Ticket $12–19',src:'Nicho estável, sazonalidade baixa'},
+  {t:'Crochê Amigurumi — Kit Receitas',m:'🇧🇷 BR',n:'artesanato',score:58,d:'Demanda média',c:'Concorrência alta',mg:'Ticket R$ 15–25',src:'Mercado saturado, diferenciação necessária'},
+];
+const rg=document.getElementById('radar-grid');
+radarData.forEach(o=>{
+  const col = o.score>=80?'var(--success)':o.score>=65?'var(--warning)':'var(--fg-faint)';
+  const circ = 2*Math.PI*22;
+  rg.insertAdjacentHTML('beforeend',`
+  <div class="card">
+    <div style="display:flex;gap:16px;align-items:flex-start">
+      <div class="score-ring">
+        <svg width="52" height="52"><circle cx="26" cy="26" r="22" stroke="var(--content2)" stroke-width="5" fill="none"/><circle cx="26" cy="26" r="22" stroke="${col}" stroke-width="5" fill="none" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${circ*(1-o.score/100)}"/></svg>
+        <span class="val" style="color:${col}">${o.score}</span>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div class="td-main" style="font-size:14px">${o.t}</div>
+        <div class="kcard-meta"><span class="chip chip-default">${o.m}</span><span class="chip chip-default">${o.n}</span></div>
+        <div class="td-sub" style="margin-top:8px">${o.src}</div>
+        <div class="kcard-meta" style="margin-top:10px">
+          <span class="chip ${o.d.includes('alta')?'chip-success':'chip-default'}">${o.d}</span>
+          <span class="chip ${o.c.includes('baixa')?'chip-success':o.c.includes('alta')?'chip-danger':'chip-default'}">${o.c}</span>
+          <span class="chip chip-default">${o.mg}</span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm">Descartar</button>
+      <button class="btn btn-flat btn-sm">Analisar oferta</button>
+      <button class="btn btn-primary btn-sm" onclick="openGenerator()">Modelar oferta →</button>
+    </div>
+  </div>`);
+});
+
+// wizard
+function openWizard(){document.getElementById('wizard').classList.add('open')}
+function closeWizard(){document.getElementById('wizard').classList.remove('open')}
+document.getElementById('wizard').addEventListener('click',e=>{if(e.target.id==='wizard')closeWizard()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeWizard()});
+</script>
+</body>
+</html>

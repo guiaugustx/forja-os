@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+html {
+  background-color: #09090b;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

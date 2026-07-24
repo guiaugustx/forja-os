@@ -1,0 +1,23 @@
+{
+  "name": "@forja/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "dotenv -e ../../.env -- node dist/index.js",
+    "lint": "eslint \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "@forja/ai": "workspace:*",
+    "@forja/db": "workspace:*",
+    "bullmq": "^5.15.0",
+    "cheerio": "^1.0.0",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.5.4"
+  }
+}

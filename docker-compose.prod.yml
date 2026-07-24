@@ -1,0 +1,96 @@
+# Forja OS — stack de produção (web + api + worker + Postgres + Redis).
+# Deploy: docker compose -f docker-compose.prod.yml up -d --build
+# As variáveis vêm de um arquivo .env ao lado (veja .env.prod.example).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: forja
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forja}
+      POSTGRES_DB: forja
+    volumes:
+      - forja_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U forja']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - forja_redisdata:/data
+
+  api:
+    build:
+      context: .
+      target: runtime
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    image: forja-os
+    restart: unless-stopped
+    command: node apps/api/dist/main.js
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://forja:${POSTGRES_PASSWORD:-forja}@postgres:5432/forja?schema=public
+      REDIS_URL: redis://redis:6379
+      API_PORT: '3333'
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
+      SILICONFLOW_BASE_URL: ${SILICONFLOW_BASE_URL:-https://api.siliconflow.com/v1}
+      SILICONFLOW_MODEL: ${SILICONFLOW_MODEL:-Qwen/Qwen2.5-72B-Instruct}
+      URLSCAN_API_KEY: ${URLSCAN_API_KEY}
+      URLSCAN_QUERY: ${URLSCAN_QUERY:-domain:cdn.utmify.com.br}
+      INGEST_LOOKBACK_DAYS: ${INGEST_LOOKBACK_DAYS:-7}
+      INGEST_MAX_OFFERS: ${INGEST_MAX_OFFERS:-20}
+      SERPAPI_KEY: ${SERPAPI_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - '${API_HOST_PORT:-8081}:3333'
+
+  worker:
+    image: forja-os
+    restart: unless-stopped
+    command: node apps/worker/dist/index.js
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://forja:${POSTGRES_PASSWORD:-forja}@postgres:5432/forja?schema=public
+      REDIS_URL: redis://redis:6379
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
+      SILICONFLOW_BASE_URL: ${SILICONFLOW_BASE_URL:-https://api.siliconflow.com/v1}
+      SILICONFLOW_MODEL: ${SILICONFLOW_MODEL:-Qwen/Qwen2.5-72B-Instruct}
+      URLSCAN_API_KEY: ${URLSCAN_API_KEY}
+      URLSCAN_QUERY: ${URLSCAN_QUERY:-domain:cdn.utmify.com.br}
+      INGEST_LOOKBACK_DAYS: ${INGEST_LOOKBACK_DAYS:-7}
+      INGEST_MAX_OFFERS: ${INGEST_MAX_OFFERS:-20}
+      INGEST_SCHEDULE_HOURS: ${INGEST_SCHEDULE_HOURS:-6}
+      SERPAPI_KEY: ${SERPAPI_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  web:
+    image: forja-os
+    restart: unless-stopped
+    working_dir: /app/apps/web
+    command: node_modules/.bin/next start -H 0.0.0.0 -p 3000
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    depends_on:
+      - api
+    ports:
+      - '${WEB_HOST_PORT:-8080}:3000'
+
+volumes:
+  forja_pgdata:
+  forja_redisdata:
