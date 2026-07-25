@@ -52,10 +52,55 @@ export interface OfferXray {
   category?: string;
 }
 
-// Oferta como o Radar/curadoria consome (inclui os campos novos da ingestão).
+export type HarvestKind = 'resource' | 'checkout';
+
+export interface HarvestSourceDTO {
+  id: string;
+  name: string;
+  query: string;
+  kind: HarvestKind;
+  enabled: boolean;
+  minHitCount: number;
+  maxAgeDays: number;
+  lastRunAt: string | null;
+}
+
+export type CandidateStatus = 'pending' | 'discarded_auto' | 'discarded_manual' | 'promoted';
+
+// Candidato cru da colheita: só o que a varredura do urlscan devolveu.
+export interface CandidateDTO {
+  id: string;
+  dedupeKey: string;
+  url: string;
+  domain: string;
+  title: string | null;
+  screenshotUrl: string | null;
+  productName: string | null;
+  priceCents: number | null;
+  gateway: string | null;
+  hitCount: number;
+  firstSeenAt: string | null;
+  lastSeenAt: string | null;
+  daysRunning: number;
+  status: CandidateStatus;
+  discardReason: string | null;
+  source: { id: string; name: string; kind: HarvestKind };
+}
+
+export interface CandidateListDTO {
+  items: CandidateDTO[];
+  nextCursor: string | null;
+  total: number;
+}
+
+export type OfferStage = 'analysis' | 'pipeline' | 'discarded';
+export type EnrichmentState = 'pending' | 'running' | 'done' | 'failed';
+
+// Oferta promovida pela triagem.
 export interface OfferDTO {
   id: string;
   source: string;
+  candidateId: string | null;
   advertiser: string;
   name: string;
   market: string;
@@ -71,13 +116,16 @@ export interface OfferDTO {
   opportunityScore: number | null;
   trafficScore: number | null;
   xray: OfferXray | null;
-  saved: boolean;
+  stage: OfferStage;
+  enrichment: EnrichmentState;
+  enrichmentError: string | null;
+  alerts: string[] | null;
   firstSeen: string | null;
   lastSeen: string | null;
 }
 
 export interface IngestionEvent {
-  domain: string;
+  key: string;
   ok: boolean;
   reason?: string;
 }
@@ -85,17 +133,31 @@ export interface IngestionEvent {
 export interface IngestionRunDTO {
   id: string;
   query: string;
-  status: 'running' | 'done' | 'error';
+  sourceId: string | null;
+  source?: { name: string; kind: HarvestKind } | null;
+  status: 'running' | 'done' | 'partial' | 'error';
   stage: string | null;
-  foundCount: number;
-  processedCount: number;
-  savedCount: number;
-  discardedCount: number;
+  rawHits: number;
+  newCandidates: number;
+  autoDiscarded: number;
+  queuedForTriage: number;
   events: IngestionEvent[] | null;
   error: string | null;
   startedAt: string;
   finishedAt: string | null;
 }
+
+// Rótulos dos alertas do enriquecimento, exibidos na fila de Análise.
+export const ALERT_LABELS: Record<string, string> = {
+  'nao-e-pagina-de-vendas': 'Não parece página de vendas',
+  'produto-physical': 'A IA diz que é produto físico',
+  'produto-service': 'A IA diz que é serviço',
+  'produto-other': 'Tipo de produto indefinido',
+  'sem-trafego': 'Sem sinal de tráfego',
+  'sem-conteudo': 'Página fora do ar ou sem conteúdo',
+  'categoria-bloqueada': 'Categoria bloqueada (delivery/comida)',
+  'pagina-de-vendas-nao-localizada': 'Página de vendas não localizada',
+};
 
 // ============================================================
 // GERADOR — blocos gerados por IA (estrutura base da oferta)
