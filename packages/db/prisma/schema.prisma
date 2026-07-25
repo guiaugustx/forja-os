@@ -69,6 +69,9 @@ model Candidate {
   discardReason String?
   triagedAt     DateTime?
   firstRunId    String
+  // Relação de verdade para a rodada que descobriu o candidato: garante no banco
+  // que nenhum candidato aponte para uma rodada inexistente.
+  firstRun      IngestionRun    @relation(fields: [firstRunId], references: [id])
   offer         Offer?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
@@ -163,7 +166,6 @@ model Offer {
   @@index([stage])
 }
 
-// Registro de cada rodada de ingestão (feedback do botão "Rodar ingestão").
 // Ledger de domínios já processados na ingestão — para não re-analisar os mesmos
 // e avançar para links novos a cada rodada (re-checa após o cooldown).
 model SeenDomain {
@@ -191,6 +193,7 @@ model IngestionRun {
   queuedForTriage Int            @default(0) // chegaram à sua fila
   events          Json? // feed de decisões recentes [{key, ok, reason}]
   error           String?
+  candidates      Candidate[]
   startedAt       DateTime       @default(now())
   finishedAt      DateTime?
 }

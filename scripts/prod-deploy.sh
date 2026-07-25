@@ -20,6 +20,10 @@ $COMPOSE exec -T api sh -lc "cd packages/db && node_modules/.bin/prisma db push 
 echo "→ Semeando dados de exemplo (idempotente; ignore se já semeado)…"
 $COMPOSE exec -T api sh -lc "cd packages/db && node_modules/.bin/tsx prisma/seed.ts" || echo "  (seed já aplicado — ok)"
 
+# Sem HarvestSource populado a colheita não tem o que varrer na VPS.
+echo "→ Semeando as fontes de colheita (idempotente)…"
+$COMPOSE exec -T api sh -lc "cd packages/db && node_modules/.bin/tsx prisma/seed-sources.ts"
+
 echo ""
 echo "✅ Deploy concluído."
 $COMPOSE ps

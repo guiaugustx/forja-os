@@ -23,9 +23,11 @@ async function main() {
   }
 }
 
+// Desconecta antes de sair: process.exit() dentro do catch mataria o processo
+// antes do finally rodar, deixando a conexão pendurada no Postgres.
 main()
   .catch((e) => {
     console.error(e);
-    process.exit(1);
+    process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());

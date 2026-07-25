@@ -1,12 +1,3 @@
-/*
-  Warnings:
-
-  - You are about to drop the column `foundCount` on the `IngestionRun` table. All the data in the column will be lost.
-  - You are about to drop the column `savedCount` on the `IngestionRun` table. All the data in the column will be lost.
-  - You are about to drop the column `saved` on the `Offer` table. All the data in the column will be lost.
-  - A unique constraint covering the columns `[candidateId]` on the table `Offer` will be added. If there are existing duplicate values, this will fail.
-
-*/
 -- CreateEnum
 CREATE TYPE "HarvestKind" AS ENUM ('resource', 'checkout');
 
@@ -20,24 +11,23 @@ CREATE TYPE "OfferStage" AS ENUM ('analysis', 'pipeline', 'discarded');
 CREATE TYPE "EnrichmentState" AS ENUM ('pending', 'running', 'done', 'failed');
 
 -- AlterTable
-ALTER TABLE "IngestionRun" DROP COLUMN "foundCount",
-DROP COLUMN "savedCount",
-ADD COLUMN     "autoDiscarded" INTEGER NOT NULL DEFAULT 0,
-ADD COLUMN     "events" JSONB,
-ADD COLUMN     "newCandidates" INTEGER NOT NULL DEFAULT 0,
-ADD COLUMN     "queuedForTriage" INTEGER NOT NULL DEFAULT 0,
-ADD COLUMN     "rawHits" INTEGER NOT NULL DEFAULT 0,
-ADD COLUMN     "sourceId" TEXT,
-ADD COLUMN     "stage" TEXT;
-
--- AlterTable
 ALTER TABLE "Offer" DROP COLUMN "saved",
 ADD COLUMN     "alerts" JSONB,
 ADD COLUMN     "candidateId" TEXT,
 ADD COLUMN     "enrichment" "EnrichmentState" NOT NULL DEFAULT 'pending',
 ADD COLUMN     "enrichmentError" TEXT,
-ADD COLUMN     "stage" "OfferStage" NOT NULL DEFAULT 'analysis',
-ADD COLUMN     "trafficScore" INTEGER;
+ADD COLUMN     "stage" "OfferStage" NOT NULL DEFAULT 'analysis';
+
+-- AlterTable
+ALTER TABLE "IngestionRun" DROP COLUMN "discardedCount",
+DROP COLUMN "foundCount",
+DROP COLUMN "processedCount",
+DROP COLUMN "savedCount",
+ADD COLUMN     "autoDiscarded" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "newCandidates" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "queuedForTriage" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "rawHits" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "sourceId" TEXT;
 
 -- CreateTable
 CREATE TABLE "HarvestSource" (
@@ -83,18 +73,6 @@ CREATE TABLE "Candidate" (
     CONSTRAINT "Candidate_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "SeenDomain" (
-    "domain" TEXT NOT NULL,
-    "pageUrl" TEXT NOT NULL,
-    "outcome" TEXT NOT NULL,
-    "reason" TEXT,
-    "seenAt" TIMESTAMP(3) NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "SeenDomain_pkey" PRIMARY KEY ("domain")
-);
-
 -- CreateIndex
 CREATE UNIQUE INDEX "HarvestSource_query_key" ON "HarvestSource"("query");
 
@@ -108,9 +86,6 @@ CREATE INDEX "Candidate_status_hitCount_idx" ON "Candidate"("status", "hitCount"
 CREATE INDEX "Candidate_sourceId_status_idx" ON "Candidate"("sourceId", "status");
 
 -- CreateIndex
-CREATE INDEX "SeenDomain_seenAt_idx" ON "SeenDomain"("seenAt");
-
--- CreateIndex
 CREATE UNIQUE INDEX "Offer_candidateId_key" ON "Offer"("candidateId");
 
 -- CreateIndex
@@ -120,7 +95,11 @@ CREATE INDEX "Offer_stage_idx" ON "Offer"("stage");
 ALTER TABLE "Candidate" ADD CONSTRAINT "Candidate_sourceId_fkey" FOREIGN KEY ("sourceId") REFERENCES "HarvestSource"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Candidate" ADD CONSTRAINT "Candidate_firstRunId_fkey" FOREIGN KEY ("firstRunId") REFERENCES "IngestionRun"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Offer" ADD CONSTRAINT "Offer_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "Candidate"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "IngestionRun" ADD CONSTRAINT "IngestionRun_sourceId_fkey" FOREIGN KEY ("sourceId") REFERENCES "HarvestSource"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
