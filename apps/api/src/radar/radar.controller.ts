@@ -1,39 +1,35 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { RadarService } from './radar.service';
+import { CandidatesService } from './candidates.service';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import {
-  ingestInputSchema,
-  offerCurationSchema,
-  type IngestInput,
-  type OfferCuration,
+  harvestInputSchema,
+  triageDecisionSchema,
+  bulkTriageSchema,
+  offerStageSchema,
+  type HarvestInput,
+  type TriageDecision,
+  type BulkTriage,
+  type OfferStageInput,
 } from './radar.dto';
 
 @Controller('radar')
 export class RadarController {
-  constructor(private readonly radar: RadarService) {}
+  constructor(
+    private readonly radar: RadarService,
+    private readonly candidates: CandidatesService,
+  ) {}
 
-  @Get('offers')
-  offers(
-    @Query('market') market?: string,
-    @Query('niche') niche?: string,
-    @Query('saved') saved?: string,
-  ) {
-    return this.radar.offers({ market, niche, saved });
+  // ===== fontes e colheita =====
+
+  @Get('sources')
+  sources() {
+    return this.radar.sources();
   }
 
-  @Get('trends')
-  trends() {
-    return this.radar.trends();
-  }
-
-  @Get('shortlist')
-  shortlist() {
-    return this.radar.shortlist();
-  }
-
-  @Post('ingest')
-  ingest(@Body(new ZodValidationPipe(ingestInputSchema)) body: IngestInput) {
-    return this.radar.ingest(body);
+  @Post('harvest')
+  harvest(@Body(new ZodValidationPipe(harvestInputSchema)) body: HarvestInput) {
+    return this.radar.harvest(body);
   }
 
   @Get('runs')
@@ -46,11 +42,69 @@ export class RadarController {
     return this.radar.run(id);
   }
 
-  @Patch('offers/:id')
-  setSaved(
-    @Param('id') id: string,
-    @Body(new ZodValidationPipe(offerCurationSchema)) body: OfferCuration,
+  // ===== triagem =====
+
+  @Get('candidates')
+  list(
+    @Query('status') status?: string,
+    @Query('sourceId') sourceId?: string,
+    @Query('reason') reason?: string,
+    @Query('sort') sort?: string,
+    @Query('cursor') cursor?: string,
+    @Query('take') take?: string,
   ) {
-    return this.radar.setSaved(id, body.saved);
+    return this.candidates.list({ status, sourceId, reason, sort, cursor, take });
+  }
+
+  @Patch('candidates/:id')
+  triage(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(triageDecisionSchema)) body: TriageDecision,
+  ) {
+    return this.candidates.triage(id, body.decision);
+  }
+
+  @Post('candidates/bulk')
+  bulk(@Body(new ZodValidationPipe(bulkTriageSchema)) body: BulkTriage) {
+    return this.candidates.bulk(body.ids, body.decision);
+  }
+
+  @Post('candidates/:id/undo')
+  undo(@Param('id') id: string) {
+    return this.candidates.undo(id);
+  }
+
+  @Post('candidates/:id/restore')
+  restore(@Param('id') id: string) {
+    return this.candidates.restore(id);
+  }
+
+  // ===== ofertas =====
+
+  @Get('offers')
+  offers(
+    @Query('stage') stage?: string,
+    @Query('market') market?: string,
+    @Query('niche') niche?: string,
+  ) {
+    return this.radar.offers({ stage, market, niche });
+  }
+
+  @Patch('offers/:id')
+  setStage(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(offerStageSchema)) body: OfferStageInput,
+  ) {
+    return this.radar.setStage(id, body);
+  }
+
+  @Post('offers/:id/retry-enrichment')
+  retry(@Param('id') id: string) {
+    return this.radar.retryEnrichment(id);
+  }
+
+  @Get('trends')
+  trends() {
+    return this.radar.trends();
   }
 }

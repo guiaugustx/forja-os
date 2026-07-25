@@ -1,11 +1,22 @@
 import { z } from 'zod';
 
-export const ingestInputSchema = z.object({
-  query: z.string().min(1).optional(),
-  lookbackDays: z.number().int().positive().max(90).optional(),
-  max: z.number().int().positive().max(100).optional(),
+export const harvestInputSchema = z.object({
+  sourceId: z.string().min(1).optional(), // ausente = todas as fontes habilitadas
 });
-export type IngestInput = z.infer<typeof ingestInputSchema>;
+export type HarvestInput = z.infer<typeof harvestInputSchema>;
 
-export const offerCurationSchema = z.object({ saved: z.boolean() });
-export type OfferCuration = z.infer<typeof offerCurationSchema>;
+export const triageDecisionSchema = z.object({
+  decision: z.enum(['pipeline', 'analysis', 'discard']),
+});
+export type TriageDecision = z.infer<typeof triageDecisionSchema>;
+
+export const bulkTriageSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(500),
+  decision: z.enum(['pipeline', 'analysis', 'discard']),
+});
+export type BulkTriage = z.infer<typeof bulkTriageSchema>;
+
+export const offerStageSchema = z.object({
+  stage: z.enum(['analysis', 'pipeline', 'discarded']),
+});
+export type OfferStageInput = z.infer<typeof offerStageSchema>;
