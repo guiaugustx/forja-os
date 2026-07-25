@@ -23,7 +23,10 @@ interface DraftRow {
 }
 
 // As colunas do board são as etapas da modelagem. currentStep é o índice da
-// próxima etapa a fazer — a coluna em que o draft está É a tarefa pendente.
+// próxima etapa a fazer (0 = avatar pendente, 1 = grande ideia pendente, ...)
+// — a coluna em que o draft está É a tarefa pendente. A coluna "Oferta base"
+// (índice 0) é só pra ofertas que ainda não viraram draft; por isso nenhum
+// draft é posicionado nela por currentStep — ver byColumn.
 const COLUMNS = [
   { key: 'base', label: 'Oferta base' },
   ...MVP_GENERATOR_STEPS.map((s) => ({ key: s.key, label: s.label })),
@@ -70,12 +73,19 @@ export default function EsteiraPage() {
 
   const pending = (pipeline.data ?? []).filter((o) => !withDraft.has(o.id));
 
-  const byColumn = (index: number) =>
-    (drafts.data ?? []).filter((d) =>
-      index === COLUMNS.length - 1
-        ? d.currentStep >= MVP_GENERATOR_STEPS.length
-        : d.currentStep === index,
-    );
+  // A coluna "Oferta base" (index 0) nunca recebe draft por currentStep — ela é
+  // só pra pipeline sem draft (tratado à parte via `pending`). Cada coluna de
+  // etapa (index 1..4) casa com currentStep === index - 1, porque currentStep
+  // é a etapa PENDENTE, não a coluna visual. A última coluna ("Pronta") usa
+  // >= para não sumir com currentStep além do fim, e o >= exclusivo do "=== index - 1"
+  // das colunas de etapa evita que um draft completo caia em duas colunas.
+  const byColumn = (index: number) => {
+    if (index === 0) return [];
+    if (index === COLUMNS.length - 1) {
+      return (drafts.data ?? []).filter((d) => d.currentStep >= MVP_GENERATOR_STEPS.length);
+    }
+    return (drafts.data ?? []).filter((d) => d.currentStep === index - 1);
+  };
 
   const loading = drafts.isLoading || pipeline.isLoading;
   const hasError = drafts.isError || pipeline.isError;

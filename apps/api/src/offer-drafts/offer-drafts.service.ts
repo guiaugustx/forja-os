@@ -27,11 +27,16 @@ export class OfferDraftsService {
     return this.prisma.client.offerDraft.create({ data });
   }
 
-  // Board da esteira: cada draft com o mínimo da oferta de origem para render.
+  // Board da esteira: só o mínimo pro card (id, etapa, oferta de origem) — os
+  // blocos gerados (base/avatar/bigIdea/...) não são exibidos na lista e podem
+  // ser grandes, então não valem a pena trafegar pra cada card do board.
   findAll() {
     return this.prisma.client.offerDraft.findMany({
       orderBy: { updatedAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        currentStep: true,
+        sourceOfferId: true,
         sourceOffer: {
           select: { id: true, name: true, advertiser: true, screenshotUrl: true, opportunityScore: true },
         },

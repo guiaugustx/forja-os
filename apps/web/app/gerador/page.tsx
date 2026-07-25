@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button, Chip } from '@heroui/react';
@@ -26,11 +26,23 @@ export default function GeradorPage() {
   );
 }
 
+// currentStep é a etapa PENDENTE do draft (ver offer-drafts.service.ts) — a
+// aba que deve abrir quando o gerador carrega esse draft é a etapa que falta,
+// não sempre a primeira. Clampa pro fim caso o draft já esteja completo.
+function stepKeyForCurrentStep(currentStep: number): GeneratorStepKey {
+  const idx = Math.min(Math.max(currentStep, 0), MVP_GENERATOR_STEPS.length - 1);
+  return MVP_GENERATOR_STEPS[idx].key;
+}
+
 function GeradorInner() {
   const params = useSearchParams();
   const router = useRouter();
   const draftId = params.get('draftId');
   const { draft, stepKey, setDraft, setStepKey } = useGenerator();
+  // Guarda o draft cuja aba inicial já foi definida, pra ajustar o stepKey só
+  // na carga (troca de draftId) e não sobrescrever a navegação manual entre
+  // abas a cada refetch/re-render do mesmo draft.
+  const initializedDraftId = useRef<string | null>(null);
 
   const draftQuery = useQuery({
     queryKey: ['draft', draftId],
@@ -39,8 +51,13 @@ function GeradorInner() {
   });
 
   useEffect(() => {
-    if (draftQuery.data) setDraft(draftQuery.data);
-  }, [draftQuery.data, setDraft]);
+    if (!draftQuery.data) return;
+    setDraft(draftQuery.data);
+    if (initializedDraftId.current !== draftQuery.data.id) {
+      initializedDraftId.current = draftQuery.data.id;
+      setStepKey(stepKeyForCurrentStep(draftQuery.data.currentStep));
+    }
+  }, [draftQuery.data, setDraft, setStepKey]);
 
   const create = useMutation({
     mutationFn: () => apiPost<{ id: string }>('/offer-drafts', {}),
