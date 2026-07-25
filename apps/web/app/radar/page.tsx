@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+  type InfiniteData,
+} from '@tanstack/react-query';
 import { Button, Chip } from '@heroui/react';
 import { api, apiPost, apiPatch } from '@/lib/api';
 import { Panel } from '@/components/ui/Panel';
@@ -151,6 +157,30 @@ export default function RadarPage() {
     qc.invalidateQueries({ queryKey: ['offers'] });
   };
 
+  // Decidir uma linha é a ação mais frequente desta tela — com a fila em
+  // `useInfiniteQuery`, invalidar ['candidates'] refaz TODAS as páginas já
+  // carregadas em cadeia (cada uma com um COUNT(*) na API), e esse custo cresce
+  // com quanto o operador já triou. Em vez disso, removemos o item decidido
+  // direto do cache de cada página: zero ida ao servidor, a fila continua
+  // coerente (o item não reaparece) e o "total" acompanha a remoção. Só os
+  // caminhos raros (desfazer, erro) continuam pagando o preço de um invalidate
+  // cheio — não são o gargalo de throughput que esta correção visa.
+  const removeCandidatesFromCache = (ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    qc.setQueriesData<InfiniteData<CandidateListDTO>>({ queryKey: ['candidates'] }, (data) => {
+      if (!data) return data;
+      let removed = 0;
+      const pages = data.pages.map((page) => {
+        const items = page.items.filter((c) => !idSet.has(c.id));
+        removed += page.items.length - items.length;
+        return items.length === page.items.length ? page : { ...page, items };
+      });
+      if (removed === 0) return data;
+      return { ...data, pages: pages.map((page) => ({ ...page, total: Math.max(0, page.total - removed) })) };
+    });
+  };
+
   const armUndo = (id: string, decision: Decision) => {
     if (undoTimer.current) clearTimeout(undoTimer.current);
     setUndoId(id);
@@ -173,11 +203,17 @@ export default function RadarPage() {
     onSuccess: (_d, v) => {
       armUndo(v.id, v.decision);
       setNotice(null);
-      refreshLists();
+      removeCandidatesFromCache([v.id]);
+      // A oferta criada por essa decisão pode interessar à aba de Análise; como
+      // essa query só busca quando a aba está ativa (`enabled`), invalidar aqui
+      // não dispara rede nenhuma na tela de triagem — só marca como stale.
+      qc.invalidateQueries({ queryKey: ['offers'] });
     },
     // 409 mais comum aqui: o candidato já foi triado por outra aba/lote — a
     // mensagem do backend já explica isso, só precisa chegar ao operador em
-    // vez de morrer silenciosamente e deixar a linha "grudada" na tela.
+    // vez de morrer silenciosamente e deixar a linha "grudada" na tela. Caminho
+    // raro (não é o que se repete a cada decisão), então o invalidate cheio é
+    // aceitável aqui.
     onError: (err) => {
       setNotice(errorMessage(err, 'Não consegui aplicar essa decisão.'));
       refreshLists();
@@ -189,7 +225,8 @@ export default function RadarPage() {
       apiPost<BulkTriageResultDTO>('/radar/candidates/bulk', v),
     onSuccess: (res) => {
       setSelected(new Set());
-      refreshLists();
+      removeCandidatesFromCache(res.succeeded);
+      qc.invalidateQueries({ queryKey: ['offers'] });
       if (res.failed.length > 0) {
         setNotice(
           `${res.succeeded.length} aplicados, ${res.failed.length} falharam (ex.: ${res.failed[0].reason}).`,
@@ -255,7 +292,29 @@ export default function RadarPage() {
     [candidates.data],
   );
   const total = candidates.data?.pages[0]?.total ?? 0;
-  const running = runs.data?.some((r) => r.status === 'running') || harvest.isPending;
+  // Falha na query de rodadas não pode fazer "running" virar falso por engano —
+  // isso destravaria o botão "Colher" e convidaria a uma colheita duplicada
+  // enquanto talvez ainda exista uma rodada em andamento que só não conseguimos
+  // ler agora. Erro aqui é tratado como "assuma que está rodando".
+  const running = runs.isError || runs.data?.some((r) => r.status === 'running') || harvest.isPending;
+
+  // A lista pode encolher sem o operador pedir (decisão individual removeu a
+  // linha da cache, ou a fila foi refeita depois de um desfazer). Sem esta
+  // poda, "selected" continua com ids de linhas que já sumiram: o contador
+  // mente e o próximo lote manda ids que a API rejeita.
+  useEffect(() => {
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const ids = new Set(items.map((c) => c.id));
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (ids.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [items]);
 
   // Colher "todas as fontes" dispara uma rodada por fonte (7 hoje); mostrar só
   // a mais recente escondia o resultado da varredura inteira. Enquanto o lote
@@ -321,6 +380,13 @@ export default function RadarPage() {
         </div>
       )}
 
+      {runs.isError && (
+        <Panel className="p-3 text-[13px] text-red-400">
+          Não consegui carregar as rodadas de colheita (API offline?). Por segurança, &quot;Colher&quot;
+          fica bloqueado até a fila voltar a responder.
+        </Panel>
+      )}
+
       {summaryRuns.length > 0 && (
         <Panel className="px-4 py-3 text-[12.5px] text-neutral-400">
           {summaryRuns.length === 1 ? (
@@ -334,7 +400,12 @@ export default function RadarPage() {
           ) : (
             <>
               <b className="text-neutral-200">{summaryRuns.length} fontes</b> ·{' '}
-              {summaryRuns.some((r) => r.status === 'running') ? 'colhendo' : 'concluído'} —{' '}
+              {summaryRuns.some((r) => r.status === 'running')
+                ? 'colhendo'
+                : summaryRuns.some((r) => r.status === 'error')
+                  ? 'concluído com falhas'
+                  : 'concluído'}{' '}
+              —{' '}
               {summaryRuns.reduce((n, r) => n + r.rawHits, 0).toLocaleString('pt-BR')} varridos ·{' '}
               {summaryRuns.reduce((n, r) => n + r.newCandidates, 0)} novos ·{' '}
               {summaryRuns.reduce((n, r) => n + r.autoDiscarded, 0)} filtrados ·{' '}
@@ -347,6 +418,11 @@ export default function RadarPage() {
           {summaryRuns.some((r) => r.status === 'partial') && (
             <Chip className="ml-2" size="sm" variant="soft" color="warning">
               parcial — a próxima rodada continua daqui
+            </Chip>
+          )}
+          {summaryRuns.some((r) => r.status === 'error') && (
+            <Chip className="ml-2" size="sm" variant="soft" color="danger">
+              falhou — pelo menos uma fonte não completou
             </Chip>
           )}
         </Panel>
