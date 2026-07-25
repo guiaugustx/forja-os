@@ -157,7 +157,18 @@ export const ALERT_LABELS: Record<string, string> = {
   'sem-conteudo': 'Página fora do ar ou sem conteúdo',
   'categoria-bloqueada': 'Categoria bloqueada (delivery/comida)',
   'pagina-de-vendas-nao-localizada': 'Página de vendas não localizada',
+  'pagina-de-vendas-duplicada': 'Página de vendas já pertence a outra oferta',
 };
+
+// Resposta das decisões em lote da triagem. O formato é o mesmo para descartar e
+// para promover — o cliente não precisa saber qual decisão enviou para ler a
+// resposta. `failed` traz o motivo de cada item que não passou, para a tela
+// poder dizer "38 promovidos, 2 falharam" em vez de recarregar às cegas.
+export interface BulkTriageResultDTO {
+  count: number;
+  succeeded: string[];
+  failed: { id: string; reason: string }[];
+}
 
 // ============================================================
 // GERADOR — blocos gerados por IA (estrutura base da oferta)
