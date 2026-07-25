@@ -23,19 +23,19 @@ enum HarvestKind {
 // Fonte de mineração: uma query urlscan com cursor próprio, para que cada rodada
 // continue de onde a anterior parou em vez de re-varrer o topo dos 10.000.
 model HarvestSource {
-  id          String        @id @default(cuid())
+  id          String         @id @default(cuid())
   name        String
-  query       String        @unique
+  query       String         @unique
   kind        HarvestKind
-  enabled     Boolean       @default(true)
+  enabled     Boolean        @default(true)
   cursor      String? // search_after do urlscan
-  minHitCount Int           @default(1) // limiar do pré-filtro de circulação
-  maxAgeDays  Int           @default(90) // idem
+  minHitCount Int            @default(1) // limiar do pré-filtro de circulação
+  maxAgeDays  Int            @default(90) // idem
   lastRunAt   DateTime?
   candidates  Candidate[]
   runs        IngestionRun[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 }
 
 enum CandidateStatus {
@@ -97,21 +97,21 @@ enum OpportunityStatus {
 }
 
 model Opportunity {
-  id           String            @id @default(cuid())
-  title        String
-  market       String // BR | US | ES ...
-  niche        String
-  score        Int               @default(0)
-  demand       String? // alta | media | baixa
-  competition  String?
-  ticketRange  String?
-  sourceNotes  String?
-  status       OpportunityStatus @default(open)
-  offerId      String?
-  offer        Offer?            @relation(fields: [offerId], references: [id])
-  products     Product[]
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id          String            @id @default(cuid())
+  title       String
+  market      String // BR | US | ES ...
+  niche       String
+  score       Int               @default(0)
+  demand      String? // alta | media | baixa
+  competition String?
+  ticketRange String?
+  sourceNotes String?
+  status      OpportunityStatus @default(open)
+  offerId     String?
+  offer       Offer?            @relation(fields: [offerId], references: [id])
+  products    Product[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 }
 
 enum OfferSource {
@@ -125,7 +125,7 @@ enum OfferSource {
 
 // Oferta minerada (ingestão via urlscan / espionagem de anúncios / marketplace)
 model Offer {
-  id               String        @id @default(cuid())
+  id               String          @id @default(cuid())
   source           OfferSource
   advertiser       String
   name             String
@@ -141,9 +141,9 @@ model Offer {
   trafficScore     Int? // sinal de tráfego (pixels de anúncio + circulação urlscan)
   firstSeen        DateTime?
   lastSeen         DateTime?
-  daysRunning      Int           @default(0) // proxy de persistência (urlscan)
+  daysRunning      Int             @default(0) // proxy de persistência (urlscan)
   scanCount        Int? // nº de scans no urlscan (intensidade)
-  activeAdsCount   Int           @default(0)
+  activeAdsCount   Int             @default(0)
   sampleCreatives  Json? // [{url, format, ...}]
   candidateId      String?         @unique
   candidate        Candidate?      @relation(fields: [candidateId], references: [id])
@@ -153,8 +153,8 @@ model Offer {
   alerts           Json? // ['produto-fisico','nao-e-pagina-de-vendas','sem-trafego','sem-conteudo','pagina-de-vendas-nao-localizada']
   opportunities    Opportunity[]
   drafts           OfferDraft[]
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   @@unique([source, pageUrl])
   @@index([market, niche])
@@ -385,18 +385,18 @@ enum CampaignPlatform {
 }
 
 model Campaign {
-  id              String               @id @default(cuid())
-  productId       String
-  product         Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
-  funnelId        String?
-  platform        CampaignPlatform
-  externalId      String?
-  name            String
-  status          String               @default("active")
-  dailyBudgetCents Int                 @default(0)
-  metrics         CampaignMetricDaily[]
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  id               String                @id @default(cuid())
+  productId        String
+  product          Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  funnelId         String?
+  platform         CampaignPlatform
+  externalId       String?
+  name             String
+  status           String                @default("active")
+  dailyBudgetCents Int                   @default(0)
+  metrics          CampaignMetricDaily[]
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 }
 
 model CampaignMetricDaily {
@@ -451,20 +451,21 @@ model Transaction {
 }
 
 model GatewayBalance {
-  id            String   @id @default(cuid())
-  gateway       String   @unique
-  availableCents Int     @default(0)
-  pendingCents  Int      @default(0)
-  currency      String   @default("BRL")
-  syncedAt      DateTime @default(now())
+  id             String   @id @default(cuid())
+  gateway        String   @unique
+  availableCents Int      @default(0)
+  pendingCents   Int      @default(0)
+  currency       String   @default("BRL")
+  syncedAt       DateTime @default(now())
 }
 
 model FxRate {
-  id       String   @id @default(cuid())
-  base     String
-  quote    String
-  rate     Float
-  date     DateTime
+  id    String   @id @default(cuid())
+  base  String
+  quote String
+  rate  Float
+  date  DateTime
+
   @@unique([base, quote, date])
 }
 
