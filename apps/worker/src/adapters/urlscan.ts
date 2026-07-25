@@ -4,22 +4,19 @@ import * as cheerio from 'cheerio';
 
 const SEARCH_URL = 'https://urlscan.io/api/v1/search/';
 
-export interface UrlscanHit {
-  uuid: string;
-  pageUrl: string;
-  domain: string;
-  title: string;
-  time: string | null;
-  screenshotUrl: string | null;
-  sort: unknown[] | undefined; // usado para paginação (search_after)
-}
+import type { RawHit } from '../lib/aggregate';
 
 interface RawResult {
   _id?: string;
   sort?: unknown[];
   page?: { url?: string; domain?: string; title?: string };
-  task?: { url?: string; time?: string };
-  screenshot?: string;
+  task?: { url?: string; time?: string; referer?: string };
+}
+
+export interface SearchPage {
+  hits: RawHit[];
+  nextCursor: string | null;
+  pageSize: number;
 }
 
 function apiKey(): string {
@@ -27,69 +24,63 @@ function apiKey(): string {
 }
 
 /**
- * Busca páginas que casam com a query (ex.: `domain:cdn.utmify.com.br`).
- * Deduplica por domínio (um domínio ≈ um anunciante/oferta) e PAGINA (search_after)
- * até juntar `max` domínios únicos — os produtos digitais são minoria, então é
- * preciso vasculhar mais fundo do que uma página de 100 resultados.
+ * Converte a resposta da Search API em hits crus. Separado da requisição para
+ * ser testável sem rede — o parsing é onde mora o risco, não o fetch.
+ *
+ * Nada é deduplicado aqui: hits repetidos da mesma página são o sinal de
+ * circulação e quem agrega é `aggregateHits`.
  */
-export async function searchOffers(
-  opts: { query: string; lookbackDays: number; max: number },
-  skipDomains: Set<string> = new Set(),
-): Promise<UrlscanHit[]> {
+export function parseSearchResponse(json: unknown): SearchPage {
+  const results = (json as { results?: RawResult[] })?.results ?? [];
+  const hits: RawHit[] = [];
+
+  for (const r of results) {
+    const pageUrl = r.page?.url ?? r.task?.url;
+    const pageDomain = r.page?.domain;
+    if (!pageUrl || !pageDomain) continue;
+    hits.push({
+      uuid: r._id ?? '',
+      pageUrl,
+      pageDomain,
+      title: r.page?.title ?? pageDomain,
+      time: r.task?.time ?? null,
+      referer: r.task?.referer ?? null,
+    });
+  }
+
+  const last = results[results.length - 1];
+  const nextCursor = last?.sort?.length ? last.sort.join(',') : null;
+  return { hits, nextCursor, pageSize: results.length };
+}
+
+/**
+ * Uma página de resultados. O cursor (`search_after`) é persistido em
+ * HarvestSource, então cada rodada continua de onde a anterior parou em vez de
+ * re-varrer o topo dos 10.000 resultados.
+ *
+ * Sem filtro de data: o cursor já dá a progressão, e um `date:>now-Nd` colidiria
+ * com ele — a varredura anda para trás no tempo e o filtro cortaria justamente o
+ * trecho ainda não visitado.
+ */
+export async function searchPage(opts: {
+  query: string;
+  cursor: string | null;
+  size?: number;
+}): Promise<SearchPage> {
   const key = apiKey();
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (key) headers['API-Key'] = key;
 
-  const q = `${opts.query} AND date:>now-${opts.lookbackDays}d`;
-  const pageSize = 100;
-  const maxPages = 20; // trava de segurança (~2000 resultados brutos)
+  const size = opts.size ?? 100;
+  let url = `${SEARCH_URL}?q=${encodeURIComponent(opts.query)}&size=${size}`;
+  if (opts.cursor) url += `&search_after=${encodeURIComponent(opts.cursor)}`;
 
-  const seenDomain = new Set<string>();
-  const hits: UrlscanHit[] = [];
-  let searchAfter: string | null = null;
-
-  for (let page = 0; page < maxPages && hits.length < opts.max; page++) {
-    let url = `${SEARCH_URL}?q=${encodeURIComponent(q)}&size=${pageSize}`;
-    if (searchAfter) url += `&search_after=${encodeURIComponent(searchAfter)}`;
-
-    const res = await fetch(url, { headers });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      if (page === 0) throw new Error(`urlscan search ${res.status}: ${body.slice(0, 200)}`);
-      break;
-    }
-    const json = (await res.json()) as { results?: RawResult[] };
-    const results = json.results ?? [];
-    if (results.length === 0) break;
-
-    for (const r of results) {
-      const pageUrl = r.page?.url ?? r.task?.url;
-      const domain = r.page?.domain ?? '';
-      if (!pageUrl || !domain || seenDomain.has(domain)) continue;
-      // Exclui o próprio CDN do Utmify e domínios já processados (memória).
-      if (domain.includes('utmify') || skipDomains.has(domain)) {
-        seenDomain.add(domain);
-        continue;
-      }
-      seenDomain.add(domain);
-      hits.push({
-        uuid: r._id ?? '',
-        pageUrl,
-        domain,
-        title: r.page?.title ?? domain,
-        time: r.task?.time ?? null,
-        screenshotUrl: r._id ? `https://urlscan.io/screenshots/${r._id}.png` : null,
-        sort: r.sort,
-      });
-      if (hits.length >= opts.max) break;
-    }
-
-    const last = results[results.length - 1];
-    if (results.length < pageSize || !last?.sort || last.sort.length === 0) break;
-    searchAfter = last.sort.join(',');
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`urlscan search ${res.status}: ${body.slice(0, 200)}`);
   }
-
-  return hits;
+  return parseSearchResponse(await res.json());
 }
 
 export interface DomainActivity {
