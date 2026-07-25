@@ -153,7 +153,7 @@ model Offer {
   stage            OfferStage      @default(analysis)
   enrichment       EnrichmentState @default(pending)
   enrichmentError  String?
-  alerts           Json? // ['produto-fisico','nao-e-pagina-de-vendas','sem-trafego','sem-conteudo','pagina-de-vendas-nao-localizada']
+  alerts           Json? // ['produto-physical','produto-service','produto-other','nao-e-pagina-de-vendas','sem-trafego','sem-conteudo','pagina-de-vendas-nao-localizada','pagina-de-vendas-duplicada']
   opportunities    Opportunity[]
   drafts           OfferDraft[]
   createdAt        DateTime        @default(now())

@@ -7,15 +7,10 @@ import { fetchTrend } from '../adapters/trends';
 import { computeScore } from '../lib/score';
 import { looksLikeSalesPage, computeTraffic, isBlockedCategory } from '../lib/filters';
 import { resolveSalesPage } from '../lib/resolveSalesPage';
+import { parseGrowth } from '../lib/growth';
 
 export interface EnrichJobData {
   offerId: string;
-}
-
-function parseGrowth(pct: string | null): number | null {
-  if (!pct) return null;
-  const n = Number(pct.replace(/[+%\s]/g, ''));
-  return Number.isFinite(n) ? n : null;
 }
 
 /**
@@ -72,6 +67,9 @@ export async function enrich(job: Job<EnrichJobData>) {
 
     // Numa fonte de checkout, a URL colhida é o gateway — o raio-x precisa da
     // página de vendas, que a cascata tenta descobrir antes de qualquer download.
+    // Se a cascata desiste, `targetUrl` continua apontando pro gateway — sinalizado
+    // abaixo para não gastar token de LLM nele (Correção 4).
+    let salesPageMissing = false;
     if (isCheckout && candidate) {
       const resolved = await resolveSalesPage(candidate.url, candidate.productName, {
         referer: candidate.referer,
@@ -88,7 +86,10 @@ export async function enrich(job: Job<EnrichJobData>) {
         },
       });
       if (resolved) targetUrl = resolved.url;
-      else alerts.push('pagina-de-vendas-nao-localizada');
+      else {
+        alerts.push('pagina-de-vendas-nao-localizada');
+        salesPageMissing = true;
+      }
     }
 
     const page = await fetchAndExtract(targetUrl);
@@ -103,7 +104,12 @@ export async function enrich(job: Job<EnrichJobData>) {
       alerts.push('nao-e-pagina-de-vendas');
     }
 
-    const xray = page.ok
+    // Correção 4: numa fonte de checkout sem página de vendas resolvida,
+    // `targetUrl` é o próprio gateway — mandar isso pro raio-x gastaria o token de
+    // LLM que este job existe para racionar, produzindo um raio-x previsivelmente
+    // inútil. O alerta `pagina-de-vendas-nao-localizada` já avisa o humano; o
+    // resto do enriquecimento (tráfego, atividade, score) segue normalmente.
+    const xray = page.ok && !salesPageMissing
       ? await extractXray({ pageText: page.text, url: targetUrl, title: offer.name })
       : null;
 
@@ -125,6 +131,18 @@ export async function enrich(job: Job<EnrichJobData>) {
       lastSeen: activity.lastSeen,
     });
     if (!traffic.hasTraffic) alerts.push('sem-trafego');
+
+    // Correção 1: `getDomainActivity` devolve exatamente essa forma vazia
+    // (scanCount 0, sem firstSeen/lastSeen) tanto quando o domínio realmente não
+    // tem histórico quanto quando o urlscan respondeu !ok — ela não lança, então
+    // não dá pra distinguir os dois casos pelo valor sozinho. Combinado com a
+    // página não tendo baixado (sem pixels pra ler), nenhum dos dois insumos do
+    // tráfego é real: gravar zero aqui não seria medir, seria apagar um dossiê
+    // bom por causa de uma coleta ruim. Preservamos o valor anterior da oferta.
+    const activityIsEmpty = activity.scanCount === 0 && !activity.firstSeen && !activity.lastSeen;
+    const collectionFailed = !page.ok && activityIsEmpty;
+    const trafficScore = collectionFailed ? (offer.trafficScore ?? traffic.score) : traffic.score;
+    const scanCount = collectionFailed ? (offer.scanCount ?? activity.scanCount) : activity.scanCount;
 
     const niche = xray?.niche || offer.niche || 'desconhecido';
     const market = xray?.market || offer.market || 'BR';
@@ -149,36 +167,72 @@ export async function enrich(job: Job<EnrichJobData>) {
         ? Math.max(0, Math.round((lastSeen.getTime() - firstSeen.getTime()) / 86_400_000))
         : offer.daysRunning;
 
+    // Correção 3: no schema do raio-x `ticketEstCents` é nonnegative, então `0` é
+    // um valor válido e `??` não cai no fallback — uma página sem preço visível
+    // gravaria 0 por cima de um ticket bom já conhecido. Tratamos 0 como ausência.
+    const ticketEstCents = xray?.ticketEstCents ? xray.ticketEstCents : offer.ticketEstCents;
+
     const score = computeScore({
-      trafficScore: traffic.score,
+      trafficScore,
       daysRunning,
-      scanCount: activity.scanCount,
-      ticketEstCents: xray?.ticketEstCents ?? offer.ticketEstCents,
+      scanCount,
+      ticketEstCents,
       competitionCount: competitionCount + 1,
       demandGrowthPct: parseGrowth(trend?.growth90d ?? null),
     });
 
-    await prisma.offer.update({
-      where: { id: offerId },
-      data: {
-        pageUrl: targetUrl || offer.pageUrl,
-        market,
-        niche,
-        ticketEstCents: xray?.ticketEstCents ?? offer.ticketEstCents,
-        angle: xray?.angle ?? offer.angle,
-        detectedGateway: page.detectedGateway ?? offer.detectedGateway,
-        xray: xray ? (xray as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
-        opportunityScore: score,
-        trafficScore: traffic.score,
-        daysRunning,
-        scanCount: activity.scanCount,
-        firstSeen,
-        lastSeen,
-        alerts: alerts as unknown as Prisma.InputJsonValue,
-        enrichment: 'done',
-        enrichmentError: null,
-      },
-    });
+    const baseData = {
+      market,
+      niche,
+      ticketEstCents,
+      angle: xray?.angle ?? offer.angle,
+      detectedGateway: page.detectedGateway ?? offer.detectedGateway,
+      // Correção 1: sem raio-x novo (página não baixou), preservar o que já está
+      // gravado é melhor que apagar um dossiê bom com `Prisma.DbNull`.
+      xray: xray
+        ? (xray as unknown as Prisma.InputJsonValue)
+        : ((offer.xray as Prisma.InputJsonValue | null) ?? Prisma.DbNull),
+      opportunityScore: score,
+      trafficScore,
+      daysRunning,
+      scanCount,
+      firstSeen,
+      lastSeen,
+      alerts: alerts as unknown as Prisma.InputJsonValue,
+      enrichment: 'done' as const,
+      enrichmentError: null,
+    };
+
+    try {
+      await prisma.offer.update({
+        where: { id: offerId },
+        data: { ...baseData, pageUrl: targetUrl || offer.pageUrl },
+      });
+    } catch (err) {
+      // Correção 2: numa fonte de checkout, `targetUrl` é a página de vendas que a
+      // cascata resolveu — `extractBackLink` pega o primeiro link plausível, que
+      // costuma ser a home do produtor, e dois checkouts do mesmo produtor
+      // convergem pra mesma URL. O segundo `update` estoura P2002 no índice
+      // @@unique([source, pageUrl]). Isso não é uma falha do enriquecimento (o
+      // raio-x, tráfego e score são bons) — é uma colisão de identidade que o
+      // humano resolve olhando o chip. Sem esse catch, toda retentativa falharia
+      // igual, porque a cascata sempre resolve a mesma URL colidente.
+      const isUniqueViolation =
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002' &&
+        JSON.stringify((err.meta as { target?: unknown } | undefined)?.target ?? '').includes('pageUrl');
+      if (!isUniqueViolation) throw err;
+
+      alerts.push('pagina-de-vendas-duplicada');
+      await prisma.offer.update({
+        where: { id: offerId },
+        data: {
+          ...baseData,
+          // Mantém a pageUrl original da oferta (a do checkout), que não colide.
+          alerts: alerts as unknown as Prisma.InputJsonValue,
+        },
+      });
+    }
 
     return { ok: true, alerts };
   } catch (err) {
