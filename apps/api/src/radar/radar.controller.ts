@@ -8,11 +8,13 @@ import {
   bulkTriageSchema,
   offerStageSchema,
   candidateListQuerySchema,
+  updateSourceSchema,
   type HarvestInput,
   type TriageDecision,
   type BulkTriage,
   type OfferStageInput,
   type CandidateListQuery,
+  type UpdateSourceInput,
 } from './radar.dto';
 
 @Controller('radar')
@@ -27,6 +29,14 @@ export class RadarController {
   @Get('sources')
   sources() {
     return this.radar.sources();
+  }
+
+  @Patch('sources/:id')
+  updateSource(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateSourceSchema)) body: UpdateSourceInput,
+  ) {
+    return this.radar.updateSource(id, body);
   }
 
   @Post('harvest')

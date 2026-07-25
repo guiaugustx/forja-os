@@ -74,6 +74,20 @@ export function AnalysisCards({ offers, loading, onPromote, onDiscard, onRetry }
               </div>
             )}
 
+            {/* Correção 8: o caso mais provável hoje — checkout cujo cascata de
+                resolução não achou a página de vendas — termina em `done` sem
+                raio-x nenhum, porque o enriquecimento não gasta LLM numa URL
+                que já sabe não ser a página certa (ver enrich.ts). Sem esta
+                explicação o card mostrava nome, score e chips e nada dizia por
+                que o dossiê está vazio; os alertas logo abaixo é que carregam
+                o motivo. */}
+            {o.enrichment === 'done' && !o.xray && (
+              <div className="rounded-lg bg-white/5 px-3 py-2 text-[12.5px] text-neutral-400">
+                Enriquecimento concluído sem dossiê — a IA não chegou a ler a página. Veja os
+                alertas abaixo para o motivo mais provável.
+              </div>
+            )}
+
             {o.enrichment === 'done' && o.xray && (
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px]">
                 <div className="col-span-2">

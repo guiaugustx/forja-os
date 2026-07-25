@@ -8,7 +8,7 @@ import {
   useQueryClient,
   type InfiniteData,
 } from '@tanstack/react-query';
-import { Button, Chip } from '@heroui/react';
+import { AlertDialog, Button, Chip } from '@heroui/react';
 import { api, apiPost, apiPatch } from '@/lib/api';
 import { Panel } from '@/components/ui/Panel';
 import { Loading } from '@/components/ui/Loading';
@@ -17,11 +17,29 @@ import { TriageTable, type Decision } from '@/components/radar/TriageTable';
 import { AnalysisCards } from '@/components/radar/AnalysisCards';
 import type {
   CandidateListDTO,
+  CandidateStatus,
   HarvestSourceDTO,
   IngestionRunDTO,
   OfferDTO,
   BulkTriageResultDTO,
+  UpdateHarvestSourceInput,
 } from '@forja/types';
+
+// Correção 1: uma rodada não pode contar como "rodando" para sempre só porque
+// ninguém nunca marcou o fim dela — o job estola (worker reiniciado no meio,
+// falha de enfileiramento da 2ª fonte, worker fora do ar) e o BullMQ não
+// garante que o tratamento de erro do próprio job rode para fechar o registro.
+// A colheita tem um teto de 20 páginas (MAX_PAGES em apps/worker); passado um
+// tempo generosamente maior que isso, uma rodada ainda "running" deixa de ser
+// plausível e passa a ser tratada como travada — não trava mais o botão
+// "Colher", e uma nova colheita naturalmente empurra a rodada presa para fora
+// das 20 últimas.
+const RUN_STUCK_AFTER_MS = 15 * 60 * 1000;
+
+function isRunActuallyRunning(run: IngestionRunDTO): boolean {
+  if (run.status !== 'running') return false;
+  return Date.now() - new Date(run.startedAt).getTime() < RUN_STUCK_AFTER_MS;
+}
 
 type TabKey = 'triage' | 'discarded' | 'analysis' | 'trends';
 const TABS: [TabKey, string][] = [
@@ -63,6 +81,14 @@ export default function RadarPage() {
   const [undoId, setUndoId] = useState<string | null>(null);
   const [undoDecision, setUndoDecision] = useState<Decision | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Correção 3: `discarded_manual` não tinha nenhuma aba — um ✕ errado, depois
+  // que a faixa de desfazer some, ficava irrecuperável pela tela. A aba
+  // "Descartados pela máquina" agora também mostra o que você mesmo descartou,
+  // com este filtro para distinguir os dois — ambos com "Trazer de volta".
+  const [discardedFilter, setDiscardedFilter] = useState<'auto' | 'manual'>('auto');
+  // Confirmação da promoção em lote (correção 4) — guarda o que seria enviado
+  // enquanto o diálogo espera a resposta do operador.
+  const [bulkConfirm, setBulkConfirm] = useState<{ ids: string[]; decision: Decision } | null>(null);
   // Ids das rodadas criadas pelo último clique em "Colher" nesta sessão — usados
   // só para agregar o resumo (correção 9); antes do primeiro clique, cai no
   // fallback de mostrar a rodada mais recente conhecida.
@@ -81,11 +107,46 @@ export default function RadarPage() {
     queryFn: () => api<HarvestSourceDTO[]>('/radar/sources'),
   });
 
+  // Correção 2: os limiares do pré-filtro (minHitCount/maxAgeDays) nascem
+  // praticamente inertes e só são calibrados olhando a aba de descartados —
+  // sem esse controle, calibrar exigia SQL direto no Postgres. Fica junto do
+  // seletor de fontes, discreto, e só aparece com uma fonte específica
+  // selecionada (não faz sentido editar limiares de "todas as fontes" de uma
+  // vez).
+  const selectedSource = sourceId !== 'all' ? sources.data?.find((s) => s.id === sourceId) : undefined;
+  const [sourceDraft, setSourceDraft] = useState<{ minHitCount: string; maxAgeDays: string } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (selectedSource) {
+      setSourceDraft({
+        minHitCount: String(selectedSource.minHitCount),
+        maxAgeDays: String(selectedSource.maxAgeDays),
+      });
+    } else {
+      setSourceDraft(null);
+    }
+    // Só re-sincroniza quando a fonte selecionada muda de fato — reagir a
+    // `selectedSource` inteiro (novo objeto a cada refetch) apagaria o que o
+    // operador está digitando a cada 2s de polling de rodadas.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceId]);
+
+  const updateSource = useMutation({
+    mutationFn: (v: { id: string; body: UpdateHarvestSourceInput }) =>
+      apiPatch<HarvestSourceDTO>(`/radar/sources/${v.id}`, v.body),
+    onSuccess: () => {
+      setNotice(null);
+      qc.invalidateQueries({ queryKey: ['sources'] });
+    },
+    onError: (err) => setNotice(errorMessage(err, 'Não consegui atualizar essa fonte.')),
+  });
+
   const runs = useQuery({
     queryKey: ['runs'],
     queryFn: () => api<IngestionRunDTO[]>('/radar/runs'),
     refetchInterval: (q) =>
-      q.state.data?.some((r) => r.status === 'running') ? 2000 : false,
+      q.state.data?.some((r) => isRunActuallyRunning(r)) ? 2000 : false,
   });
 
   // Detecta a transição de uma rodada de "running" para terminada e só então
@@ -104,7 +165,8 @@ export default function RadarPage() {
     if (justFinished) qc.invalidateQueries({ queryKey: ['candidates'] });
   }, [runs.data, qc]);
 
-  const status = tab === 'discarded' ? 'discarded_auto' : 'pending';
+  const status: CandidateStatus =
+    tab === 'discarded' ? (discardedFilter === 'auto' ? 'discarded_auto' : 'discarded_manual') : 'pending';
   const queryString = useMemo(() => {
     const p = new URLSearchParams({ status, sort });
     if (sourceId !== 'all') p.set('sourceId', sourceId);
@@ -295,8 +357,10 @@ export default function RadarPage() {
   // Falha na query de rodadas não pode fazer "running" virar falso por engano —
   // isso destravaria o botão "Colher" e convidaria a uma colheita duplicada
   // enquanto talvez ainda exista uma rodada em andamento que só não conseguimos
-  // ler agora. Erro aqui é tratado como "assuma que está rodando".
-  const running = runs.isError || runs.data?.some((r) => r.status === 'running') || harvest.isPending;
+  // ler agora. Erro aqui é tratado como "assuma que está rodando". Já uma
+  // rodada "running" havia demais (RUN_STUCK_AFTER_MS) NÃO conta — é o que
+  // permite sair de uma rodada presa pela tela, sem UPDATE manual no banco.
+  const running = runs.isError || runs.data?.some((r) => isRunActuallyRunning(r)) || harvest.isPending;
 
   // A lista pode encolher sem o operador pedir (decisão individual removeu a
   // linha da cache, ou a fila foi refeita depois de um desfazer). Sem esta
@@ -370,6 +434,62 @@ export default function RadarPage() {
           </Button>
         </div>
       </div>
+
+      {selectedSource && sourceDraft && (
+        <Panel className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-[12.5px]">
+          <span className="font-semibold text-neutral-300">Limiares do pré-filtro:</span>
+          <label className="flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={selectedSource.enabled}
+              onChange={(e) =>
+                updateSource.mutate({ id: selectedSource.id, body: { enabled: e.target.checked } })
+              }
+            />
+            habilitada
+          </label>
+          <label className="flex items-center gap-1.5">
+            hits mín.
+            <input
+              type="number"
+              min={0}
+              value={sourceDraft.minHitCount}
+              onChange={(e) => setSourceDraft((d) => (d ? { ...d, minHitCount: e.target.value } : d))}
+              className="w-16 rounded border border-white/10 bg-white/5 px-2 py-1"
+            />
+          </label>
+          <label className="flex items-center gap-1.5">
+            idade máx. (dias)
+            <input
+              type="number"
+              min={0}
+              value={sourceDraft.maxAgeDays}
+              onChange={(e) => setSourceDraft((d) => (d ? { ...d, maxAgeDays: e.target.value } : d))}
+              className="w-16 rounded border border-white/10 bg-white/5 px-2 py-1"
+            />
+          </label>
+          <Button
+            size="sm"
+            variant="ghost"
+            isDisabled={updateSource.isPending}
+            onPress={() => {
+              const minHitCount = Number(sourceDraft.minHitCount);
+              const maxAgeDays = Number(sourceDraft.maxAgeDays);
+              if (!Number.isInteger(minHitCount) || minHitCount < 0) {
+                setNotice('Hits mínimo precisa ser um número inteiro ≥ 0.');
+                return;
+              }
+              if (!Number.isInteger(maxAgeDays) || maxAgeDays < 0) {
+                setNotice('Idade máxima precisa ser um número inteiro ≥ 0 (dias).');
+                return;
+              }
+              updateSource.mutate({ id: selectedSource.id, body: { minHitCount, maxAgeDays } });
+            }}
+          >
+            Salvar
+          </Button>
+        </Panel>
+      )}
 
       {notice && (
         <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-[13px]">
@@ -468,6 +588,54 @@ export default function RadarPage() {
         </div>
       )}
 
+      {/* Correção 4: promoção em lote (✓ Esteira / ? Análise) dispara um
+          enriquecimento — download + LLM — para cada id, e o lote aceita até
+          500. Diferente da decisão individual (que arma a faixa de desfazer),
+          uma ação em lote não tem essa rede de segurança, então exige
+          confirmação explícita informando quantos itens e o custo antes de
+          disparar. Descarte em lote não passa por aqui: é barato e reversível
+          pela aba de descartados (correção 3). Diálogo nativo (`window.confirm`)
+          travaria a página inteira enquanto está aberto — usamos o AlertDialog
+          do HeroUI, controlado por estado, no padrão já usado no resto da app. */}
+      <AlertDialog.Root
+        isOpen={bulkConfirm !== null}
+        onOpenChange={(open) => {
+          if (!open) setBulkConfirm(null);
+        }}
+      >
+        <AlertDialog.Backdrop>
+          <AlertDialog.Container>
+            <AlertDialog.Dialog>
+              <AlertDialog.Header>
+                <AlertDialog.Heading>Promover {bulkConfirm?.ids.length ?? 0} candidatos?</AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Body>
+                Isso vai enfileirar download da página e chamada de IA para{' '}
+                <b>{bulkConfirm?.ids.length ?? 0}</b> candidatos —{' '}
+                {bulkConfirm?.ids.length ?? 0} downloads e {bulkConfirm?.ids.length ?? 0} chamadas
+                de LLM, o gasto que a triagem existe para racionar. Não tem desfazer em lote depois
+                de confirmado.
+              </AlertDialog.Body>
+              <AlertDialog.Footer>
+                <Button variant="ghost" onPress={() => setBulkConfirm(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  variant="primary"
+                  isDisabled={bulk.isPending}
+                  onPress={() => {
+                    if (bulkConfirm) bulk.mutate(bulkConfirm);
+                    setBulkConfirm(null);
+                  }}
+                >
+                  Confirmar promoção
+                </Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog.Root>
+
       {(tab === 'triage' || tab === 'discarded') && (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -481,20 +649,41 @@ export default function RadarPage() {
               <option value="recent">Ordenar: visto recentemente</option>
             </select>
 
+            {tab === 'discarded' && (
+              <div className="flex items-center gap-1 rounded-lg bg-white/5 p-0.5">
+                <button
+                  onClick={() => setDiscardedFilter('auto')}
+                  className={`rounded-md px-2.5 py-1 text-[12px] font-semibold transition-colors ${
+                    discardedFilter === 'auto' ? 'bg-white/10 text-neutral-100' : 'text-neutral-400'
+                  }`}
+                >
+                  Pela máquina
+                </button>
+                <button
+                  onClick={() => setDiscardedFilter('manual')}
+                  className={`rounded-md px-2.5 py-1 text-[12px] font-semibold transition-colors ${
+                    discardedFilter === 'manual' ? 'bg-white/10 text-neutral-100' : 'text-neutral-400'
+                  }`}
+                >
+                  Por você
+                </button>
+              </div>
+            )}
+
             {selected.size > 0 && tab === 'triage' && (
               <div className="ml-auto flex items-center gap-2 rounded-lg bg-white/10 px-3 py-1.5">
                 <span className="text-[12.5px]">{selected.size} selecionados (dos carregados)</span>
                 <Button
                   size="sm"
                   variant="ghost"
-                  onPress={() => bulk.mutate({ ids: [...selected], decision: 'pipeline' })}
+                  onPress={() => setBulkConfirm({ ids: [...selected], decision: 'pipeline' })}
                 >
                   ✓ Esteira
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
-                  onPress={() => bulk.mutate({ ids: [...selected], decision: 'analysis' })}
+                  onPress={() => setBulkConfirm({ ids: [...selected], decision: 'analysis' })}
                 >
                   ? Análise
                 </Button>
@@ -517,7 +706,9 @@ export default function RadarPage() {
             <Panel className="p-8 text-center text-[13.5px] text-neutral-500">
               {tab === 'triage'
                 ? 'Fila vazia. Clique em "Colher" para varrer as fontes.'
-                : 'Nada foi descartado automaticamente ainda.'}
+                : discardedFilter === 'auto'
+                  ? 'Nada foi descartado automaticamente ainda.'
+                  : 'Você ainda não descartou nada manualmente.'}
             </Panel>
           )}
 
@@ -542,8 +733,8 @@ export default function RadarPage() {
                     <div className="truncate font-semibold">{c.domain}</div>
                     <div className="truncate text-[11.5px] text-neutral-500">{c.title ?? '—'}</div>
                   </div>
-                  <Chip size="sm" variant="soft" color="danger">
-                    {c.discardReason}
+                  <Chip size="sm" variant="soft" color={c.status === 'discarded_manual' ? 'default' : 'danger'}>
+                    {c.status === 'discarded_manual' ? 'por você' : (c.discardReason ?? 'pelo filtro')}
                   </Chip>
                   <Button size="sm" variant="ghost" onPress={() => restore.mutate(c.id)}>
                     Trazer de volta

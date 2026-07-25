@@ -65,6 +65,15 @@ export interface HarvestSourceDTO {
   lastRunAt: string | null;
 }
 
+// Correção 2: corpo do PATCH /radar/sources/:id — todos os campos opcionais
+// porque a tela edita um por vez (ex.: só reabilitar a fonte), mas a API
+// recusa um corpo totalmente vazio.
+export interface UpdateHarvestSourceInput {
+  enabled?: boolean;
+  minHitCount?: number;
+  maxAgeDays?: number;
+}
+
 export type CandidateStatus = 'pending' | 'discarded_auto' | 'discarded_manual' | 'promoted';
 
 // Candidato cru da colheita: só o que a varredura do urlscan devolveu.

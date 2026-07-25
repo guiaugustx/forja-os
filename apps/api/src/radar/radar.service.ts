@@ -2,7 +2,7 @@ import { ConflictException, Injectable, Logger, NotFoundException } from '@nestj
 import { Prisma } from '@forja/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueueService } from '../queue/queue.service';
-import type { HarvestInput, OfferStageInput } from './radar.dto';
+import type { HarvestInput, OfferStageInput, UpdateSourceInput } from './radar.dto';
 import { enrichJobId } from './enrich-job';
 
 @Injectable()
@@ -18,6 +18,22 @@ export class RadarService {
     return this.prisma.client.harvestSource.findMany({ orderBy: { name: 'asc' } });
   }
 
+  // Correção 2: rota que o spec previa e nunca chegou a existir — calibrar
+  // minHitCount/maxAgeDays (e ligar/desligar uma fonte) exigia UPDATE manual
+  // no Postgres. `findUnique` antes do `update` é o que devolve 404 legível em
+  // vez do P2025 cru do Prisma quando o id não existe.
+  async updateSource(id: string, body: UpdateSourceInput) {
+    const source = await this.prisma.client.harvestSource.findUnique({ where: { id } });
+    if (!source) throw new NotFoundException('Fonte não encontrada');
+    return this.prisma.client.harvestSource.update({ where: { id }, data: body });
+  }
+
+  // Correção 7: sem teto, a esteira e a fila de Análise cresceriam pra sempre —
+  // 300 é folgado o bastante para o volume de itens *promovidos* (que já
+  // passaram pela triagem humana, não o pool bruto de milhares) sem virar
+  // rolagem infinita. `id: 'desc'` no fim garante ordenação estável mesmo
+  // quando duas ofertas empatam em score e em createdAt (ex.: mesma
+  // transação de seed).
   offers(params: { stage?: string; market?: string; niche?: string }) {
     const where: Prisma.OfferWhereInput = {};
     if (params.stage) where.stage = params.stage as Prisma.EnumOfferStageFilter['equals'];
@@ -25,7 +41,12 @@ export class RadarService {
     if (params.niche) where.niche = params.niche;
     return this.prisma.client.offer.findMany({
       where,
-      orderBy: [{ opportunityScore: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+      orderBy: [
+        { opportunityScore: { sort: 'desc', nulls: 'last' } },
+        { createdAt: 'desc' },
+        { id: 'desc' },
+      ],
+      take: 300,
     });
   }
 

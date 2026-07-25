@@ -295,24 +295,35 @@ export class CandidatesService {
     const job = await this.queue.enrich.getJob(enrichJobId(offer.id));
     if (job) {
       const state = await job.getState();
-      if (state !== 'waiting' && state !== 'delayed') {
+      const stillPending = state === 'waiting' || state === 'delayed';
+
+      // Correção 5: uma oferta em `enrichment: 'failed'` não tem dossiê nenhum
+      // para perder — o job pode ter estourado antes mesmo de chamar a IA (ex.:
+      // a chave devolvendo 403 por falta de crédito), e mesmo quando chegou a
+      // chamar, não sobrou nada aproveitável. Não há gasto a proteger, então
+      // não recusamos por causa do estado do job nesse caso — só quando ele
+      // ainda está para rodar (`stillPending`) é que existe algo a cancelar.
+      if (!stillPending && offer.enrichment !== 'failed') {
         throw new ConflictException(
-          'O enriquecimento dessa oferta já começou (ou já terminou); não é mais seguro desfazer automaticamente. Descarte pela fila de Análise.',
+          'O enriquecimento dessa oferta já concluiu (ou está em andamento); não é mais seguro desfazer automaticamente. Descarte pela fila de Análise.',
         );
       }
-      try {
-        await job.remove();
-      } catch (err) {
-        // Perdeu a corrida entre checar o estado e remover — o worker pegou o
-        // job exatamente nesse intervalo. Recusa em vez de apagar a Offer
-        // embaixo de um enriquecimento que pode já estar rodando.
-        const message = err instanceof Error ? err.message : String(err);
-        this.logger.warn(
-          `Corrida ao cancelar job de enriquecimento da oferta ${offer.id}: ${message}`,
-        );
-        throw new ConflictException(
-          'Não foi possível cancelar o enriquecimento a tempo; ele pode já estar em andamento. Descarte pela fila de Análise.',
-        );
+
+      if (stillPending) {
+        try {
+          await job.remove();
+        } catch (err) {
+          // Perdeu a corrida entre checar o estado e remover — o worker pegou o
+          // job exatamente nesse intervalo. Recusa em vez de apagar a Offer
+          // embaixo de um enriquecimento que pode já estar rodando.
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger.warn(
+            `Corrida ao cancelar job de enriquecimento da oferta ${offer.id}: ${message}`,
+          );
+          throw new ConflictException(
+            'Não foi possível cancelar o enriquecimento a tempo; ele pode já estar em andamento. Descarte pela fila de Análise.',
+          );
+        }
       }
     }
     // job ausente: só acontece quando o enfileiramento falhou na própria
@@ -333,13 +344,25 @@ export class CandidatesService {
     });
   }
 
-  /** Traz de volta à fila algo que o pré-filtro descartou. */
+  /** Traz de volta à fila algo que foi descartado — pelo filtro ou à mão. */
   async restore(id: string) {
     const candidate = await this.prisma.client.candidate.findUnique({ where: { id } });
     if (!candidate) throw new NotFoundException('Candidato não encontrado');
+
+    // Correção 6: sem essa guarda, restaurar um `promoted` devolveria o
+    // candidato a `pending` com a `Offer` ainda viva — a próxima promoção
+    // estouraria a violação de unicidade de `candidateId` para sempre, porque
+    // nada além de SQL manual desfaria isso. A rota é pública mesmo sem botão
+    // na tela hoje, então a guarda protege de qualquer cliente, não só da UI.
+    if (candidate.status !== 'discarded_auto' && candidate.status !== 'discarded_manual') {
+      throw new ConflictException(
+        `Só é possível restaurar um candidato descartado (status atual: ${candidate.status}).`,
+      );
+    }
+
     return this.prisma.client.candidate.update({
       where: { id },
-      data: { status: 'pending', discardReason: null },
+      data: { status: 'pending', discardReason: null, triagedAt: null },
     });
   }
 }

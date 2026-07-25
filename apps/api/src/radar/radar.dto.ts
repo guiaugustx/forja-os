@@ -45,3 +45,20 @@ export const candidateListQuerySchema = z.object({
   take: z.coerce.number().int().min(1).max(200).default(50),
 });
 export type CandidateListQuery = z.infer<typeof candidateListQuerySchema>;
+
+// Correção 2: os limiares do pré-filtro (minHitCount/maxAgeDays) e o enabled
+// nasciam só editáveis via SQL — essa rota é o que permite calibrar olhando a
+// aba de descartados, sem soltar o operador no banco. Todos os campos são
+// opcionais porque a tela edita um de cada vez (ex.: só reabilitar a fonte),
+// mas o refine abaixo recusa um PATCH vazio, que não faria nada e só mascara
+// um bug do cliente como sucesso silencioso.
+export const updateSourceSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    minHitCount: z.number().int().min(0).optional(),
+    maxAgeDays: z.number().int().min(0).optional(),
+  })
+  .refine((v) => v.enabled !== undefined || v.minHitCount !== undefined || v.maxAgeDays !== undefined, {
+    message: 'Informe ao menos um campo para atualizar (enabled, minHitCount ou maxAgeDays).',
+  });
+export type UpdateSourceInput = z.infer<typeof updateSourceSchema>;
