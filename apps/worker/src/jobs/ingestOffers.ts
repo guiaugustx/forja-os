@@ -71,6 +71,10 @@ export async function ingestOffers(job: Job<IngestJobData>) {
           drop(hit.pageUrl, 'ia-nao-e-pagina-de-vendas');
           continue;
         }
+        if (xray.productType !== 'digital') {
+          drop(hit.pageUrl, `produto-nao-digital (${xray.productType})`);
+          continue;
+        }
         if (isBlockedCategory(xray.category, xray.niche, hit.title)) {
           drop(hit.pageUrl, 'delivery-comida-ia');
           continue;

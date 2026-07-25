@@ -27,7 +27,9 @@ function apiKey(): string {
 
 /**
  * Busca páginas que casam com a query (ex.: `domain:cdn.utmify.com.br`).
- * Deduplica por domínio (um domínio ≈ um anunciante/oferta) e respeita `max`.
+ * Deduplica por domínio (um domínio ≈ um anunciante/oferta) e PAGINA (search_after)
+ * até juntar `max` domínios únicos — os produtos digitais são minoria, então é
+ * preciso vasculhar mais fundo do que uma página de 100 resultados.
  */
 export async function searchOffers(opts: {
   query: string;
@@ -39,36 +41,49 @@ export async function searchOffers(opts: {
   if (key) headers['API-Key'] = key;
 
   const q = `${opts.query} AND date:>now-${opts.lookbackDays}d`;
-  const size = Math.min(Math.max(opts.max, 1), 100);
-  const url = `${SEARCH_URL}?q=${encodeURIComponent(q)}&size=${size}`;
-
-  const res = await fetch(url, { headers });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`urlscan search ${res.status}: ${body.slice(0, 200)}`);
-  }
-  const json = (await res.json()) as { results?: RawResult[] };
-  const results = json.results ?? [];
+  const pageSize = 100;
+  const maxPages = 12; // trava de segurança (~1200 resultados brutos)
 
   const seenDomain = new Set<string>();
   const hits: UrlscanHit[] = [];
-  for (const r of results) {
-    const pageUrl = r.page?.url ?? r.task?.url;
-    const domain = r.page?.domain ?? '';
-    if (!pageUrl || !domain) continue;
-    if (seenDomain.has(domain)) continue;
-    seenDomain.add(domain);
-    hits.push({
-      uuid: r._id ?? '',
-      pageUrl,
-      domain,
-      title: r.page?.title ?? domain,
-      time: r.task?.time ?? null,
-      screenshotUrl: r._id ? `https://urlscan.io/screenshots/${r._id}.png` : null,
-      sort: r.sort,
-    });
-    if (hits.length >= opts.max) break;
+  let searchAfter: string | null = null;
+
+  for (let page = 0; page < maxPages && hits.length < opts.max; page++) {
+    let url = `${SEARCH_URL}?q=${encodeURIComponent(q)}&size=${pageSize}`;
+    if (searchAfter) url += `&search_after=${encodeURIComponent(searchAfter)}`;
+
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      if (page === 0) throw new Error(`urlscan search ${res.status}: ${body.slice(0, 200)}`);
+      break;
+    }
+    const json = (await res.json()) as { results?: RawResult[] };
+    const results = json.results ?? [];
+    if (results.length === 0) break;
+
+    for (const r of results) {
+      const pageUrl = r.page?.url ?? r.task?.url;
+      const domain = r.page?.domain ?? '';
+      if (!pageUrl || !domain || seenDomain.has(domain)) continue;
+      seenDomain.add(domain);
+      hits.push({
+        uuid: r._id ?? '',
+        pageUrl,
+        domain,
+        title: r.page?.title ?? domain,
+        time: r.task?.time ?? null,
+        screenshotUrl: r._id ? `https://urlscan.io/screenshots/${r._id}.png` : null,
+        sort: r.sort,
+      });
+      if (hits.length >= opts.max) break;
+    }
+
+    const last = results[results.length - 1];
+    if (results.length < pageSize || !last?.sort || last.sort.length === 0) break;
+    searchAfter = last.sort.join(',');
   }
+
   return hits;
 }
 

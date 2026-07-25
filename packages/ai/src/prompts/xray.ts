@@ -12,6 +12,7 @@ export const xraySchema = z.object({
   market: z.string(),
   ticketEstCents: z.number().int().nonnegative(),
   isSalesPage: z.boolean(),
+  productType: z.enum(['digital', 'physical', 'service', 'other']),
   category: z.string(),
 });
 export type Xray = z.infer<typeof xraySchema>;
@@ -25,12 +26,19 @@ export const XRAY_SYSTEM = [
   '- isSalesPage: true SOMENTE se for uma página de vendas de um produto/oferta com',
   '  proposta clara, benefícios e chamada para compra/checkout. false para páginas de',
   '  link, blog, quiz, home institucional, "obrigado", ou qualquer coisa sem oferta.',
+  '- productType: "digital" para INFOPRODUTO / produto digital (ebook, curso online,',
+  '  mentoria, software/app/SaaS, assinatura, área de membros, PDF, planilha/template,',
+  '  método/protocolo entregue online). "physical" para produto FÍSICO enviado pelo',
+  '  correio (tênis, roupa, perfume, cosmético, SUPLEMENTO/encapsulado, eletrônico,',
+  '  acessório, gadget). "service" para serviço/agência/consultoria local. "other" caso',
+  '  não encaixe. Na dúvida entre digital e físico, olhe se há frete/envio/tamanho/cor',
+  '  (=physical) ou acesso imediato/download/área de membros (=digital).',
   '- category: categoria curta em minúsculas (ex.: saude, financas, relacionamento,',
-  '  emagrecimento, infoproduto, servico-local, delivery-comida, ecommerce-fisico).',
-  '  Use "delivery-comida" para delivery/entrega de comida, restaurantes, lanches.',
+  '  emagrecimento, infoproduto, delivery-comida). Use "delivery-comida" para',
+  '  delivery/entrega de comida, restaurantes, lanches.',
   'Responda SOMENTE com um objeto JSON válido, sem texto fora do JSON, com exatamente',
   'estas chaves: promise, mechanism, avatar, pain, guarantee, angle, niche, market,',
-  'ticketEstCents, isSalesPage, category.',
+  'ticketEstCents, isSalesPage, productType, category.',
 ].join(' ');
 
 export function buildXrayUser(input: { pageText: string; url?: string; title?: string }): string {
@@ -61,5 +69,6 @@ export const xrayMock: Xray = {
   market: 'BR',
   ticketEstCents: 9700,
   isSalesPage: true,
+  productType: 'digital',
   category: 'saude',
 };

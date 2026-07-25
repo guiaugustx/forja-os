@@ -48,6 +48,7 @@ export interface OfferXray {
   market: string;
   ticketEstCents: number;
   isSalesPage?: boolean;
+  productType?: 'digital' | 'physical' | 'service' | 'other';
   category?: string;
 }
 
