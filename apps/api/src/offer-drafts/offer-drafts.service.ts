@@ -27,6 +27,18 @@ export class OfferDraftsService {
     return this.prisma.client.offerDraft.create({ data });
   }
 
+  // Board da esteira: cada draft com o mínimo da oferta de origem para render.
+  findAll() {
+    return this.prisma.client.offerDraft.findMany({
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        sourceOffer: {
+          select: { id: true, name: true, advertiser: true, screenshotUrl: true, opportunityScore: true },
+        },
+      },
+    });
+  }
+
   async findOne(id: string) {
     const draft = await this.prisma.client.offerDraft.findUnique({ where: { id } });
     if (!draft) throw new NotFoundException('Draft não encontrado');

@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 
 const items = [
   { key: '/radar', label: 'Radar' },
+  { key: '/esteira', label: 'Esteira' },
   { key: '/gerador', label: 'Gerador' },
   { key: '/integracoes', label: 'Integrações' },
 ];

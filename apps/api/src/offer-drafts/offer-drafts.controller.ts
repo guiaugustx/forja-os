@@ -19,6 +19,11 @@ export class OfferDraftsController {
     return this.drafts.create(body);
   }
 
+  @Get()
+  findAll() {
+    return this.drafts.findAll();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.drafts.findOne(id);
