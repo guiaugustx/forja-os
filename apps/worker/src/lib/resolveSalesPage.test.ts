@@ -34,6 +34,38 @@ describe('extractBackLink', () => {
   });
 });
 
+describe('extractBackLink — falso positivo de substring na lista de bloqueio', () => {
+  it('não descarta netflix.com mesmo terminando nas letras de x.com', () => {
+    const html = `<html><head><meta property="og:url" content="https://netflix.com/oferta"></head></html>`;
+    expect(extractBackLink(html, 'pay.cakto.com.br')).toBe('https://netflix.com/oferta');
+  });
+
+  it('não descarta stripedshirts.com.br mesmo contendo a marca stripe como parte do rótulo', () => {
+    const html = `<html><head><meta property="og:url" content="https://stripedshirts.com.br/oferta"></head></html>`;
+    expect(extractBackLink(html, 'pay.cakto.com.br')).toBe('https://stripedshirts.com.br/oferta');
+  });
+
+  it('descarta www.instagram.com pelo sufixo de subdomínio', () => {
+    const html = `<html><head><meta property="og:url" content="https://www.instagram.com/loja"></head></html>`;
+    expect(extractBackLink(html, 'pay.cakto.com.br')).toBeNull();
+  });
+
+  it('descarta instagram.com exato (sem subdomínio)', () => {
+    const html = `<html><head><meta property="og:url" content="https://instagram.com/loja"></head></html>`;
+    expect(extractBackLink(html, 'pay.cakto.com.br')).toBeNull();
+  });
+
+  it('descarta pay.cakto.com.br pela marca de gateway no rótulo do host', () => {
+    const html = `<html><head><meta property="og:url" content="https://pay.cakto.com.br/outra-oferta"></head></html>`;
+    expect(extractBackLink(html, 'checkout.cakto.com.br')).toBeNull();
+  });
+
+  it('continua descartando o host igual ao domínio do próprio checkout', () => {
+    const html = `<html><head><meta property="og:url" content="https://pay.cakto.com.br/outra-oferta"></head></html>`;
+    expect(extractBackLink(html, 'pay.cakto.com.br')).toBeNull();
+  });
+});
+
 describe('resolveSalesPage', () => {
   const noop = {
     fetchHtml: async () => null,

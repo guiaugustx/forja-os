@@ -7,18 +7,49 @@
 
 import * as cheerio from 'cheerio';
 
-// Domínios que nunca são a página de vendas: as próprias plataformas e redes.
-const IGNORED = [
+// Duas listas, duas semânticas de match — não fundir de volta numa só.
+//
+// FULL_HOST_IGNORED guarda domínios completos e conhecidos (rede social,
+// gateway de pagamento). Casam por igualdade ou por sufixo de rótulo
+// (`host === h || host.endsWith('.' + h)`), nunca por substring: substring
+// faria `netflix.com` casar com `x.com` só por terminar nas mesmas letras.
+//
+// GATEWAY_BRAND_IGNORED guarda marcas de checkout que aparecem em subdomínios
+// variados (`pay.cakto.com.br`, `cakto.checkout.com.br`, ...). Como o rótulo
+// que carrega a marca pode estar em qualquer posição do host, casamos contra
+// os rótulos (host.split('.')), exigindo igualdade exata de rótulo — nunca
+// contra a string inteira do host, senão `stripedshirts.com.br` casaria com
+// `stripe` por conter a substring.
+//
+// Se precisar adicionar uma marca nova: gateway/plataforma de pagamento vai em
+// GATEWAY_BRAND_IGNORED (marca, não domínio completo); rede social ou domínio
+// que se conhece por inteiro vai em FULL_HOST_IGNORED. Colocar uma marca na
+// lista errada reabre o furo de falso positivo.
+const FULL_HOST_IGNORED = [
+  'instagram.com', 'facebook.com', 'youtube.com', 'tiktok.com', 'twitter.com', 'x.com',
+  'wa.me', 't.me', 'whatsapp.com', 'google.com', 'paypal.com', 'stripe.com',
+  'mercadopago.com.br', 'mercadopago.com',
+];
+
+const GATEWAY_BRAND_IGNORED = [
   'cakto', 'kirvano', 'kiwify', 'hotmart', 'ticto', 'monetizze', 'eduzz', 'perfectpay',
-  'stripe', 'paypal', 'mercadopago', 'instagram.', 'facebook.', 'youtube.', 'tiktok.',
-  'whatsapp', 'wa.me', 't.me', 'twitter.', 'x.com', 'google.',
 ];
 
 function isPlausibleSalesPage(url: string, checkoutDomain: string): boolean {
   try {
     const host = new URL(url).hostname.toLowerCase();
     if (host === checkoutDomain.toLowerCase()) return false;
-    return !IGNORED.some((bad) => host.includes(bad));
+
+    const isIgnoredFullHost = FULL_HOST_IGNORED.some(
+      (h) => host === h || host.endsWith('.' + h),
+    );
+    if (isIgnoredFullHost) return false;
+
+    const labels = host.split('.');
+    const isGatewayBrand = GATEWAY_BRAND_IGNORED.some((brand) => labels.includes(brand));
+    if (isGatewayBrand) return false;
+
+    return true;
   } catch {
     return false;
   }
