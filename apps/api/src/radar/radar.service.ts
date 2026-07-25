@@ -60,15 +60,23 @@ export class RadarService {
 
     if (sources.length === 0) throw new NotFoundException('Nenhuma fonte habilitada');
 
+    // Cria todas as rodadas antes de enfileirar qualquer job: se a criação da
+    // segunda IngestionRun falhasse no meio do laço anterior, a primeira já
+    // tinha sido enfileirada e ia rodar mesmo com o cliente recebendo 500 — a
+    // resposta mentia sobre o que foi de fato disparado.
     const runs = [];
     for (const source of sources) {
       const run = await this.prisma.client.ingestionRun.create({
         data: { query: source.query, sourceId: source.id, status: 'running' },
       });
-      await this.queue.harvest.add('manual', { runId: run.id, sourceId: source.id });
-      runs.push(run);
+      runs.push({ run, sourceId: source.id });
     }
-    return runs;
+
+    for (const { run, sourceId } of runs) {
+      await this.queue.harvest.add('manual', { runId: run.id, sourceId });
+    }
+
+    return runs.map(({ run }) => run);
   }
 
   runs() {

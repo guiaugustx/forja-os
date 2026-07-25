@@ -7,10 +7,12 @@ import {
   triageDecisionSchema,
   bulkTriageSchema,
   offerStageSchema,
+  candidateListQuerySchema,
   type HarvestInput,
   type TriageDecision,
   type BulkTriage,
   type OfferStageInput,
+  type CandidateListQuery,
 } from './radar.dto';
 
 @Controller('radar')
@@ -45,15 +47,8 @@ export class RadarController {
   // ===== triagem =====
 
   @Get('candidates')
-  list(
-    @Query('status') status?: string,
-    @Query('sourceId') sourceId?: string,
-    @Query('reason') reason?: string,
-    @Query('sort') sort?: string,
-    @Query('cursor') cursor?: string,
-    @Query('take') take?: string,
-  ) {
-    return this.candidates.list({ status, sourceId, reason, sort, cursor, take });
+  list(@Query(new ZodValidationPipe(candidateListQuerySchema)) query: CandidateListQuery) {
+    return this.candidates.list(query);
   }
 
   @Patch('candidates/:id')
