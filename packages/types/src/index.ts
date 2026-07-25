@@ -76,13 +76,22 @@ export interface OfferDTO {
   lastSeen: string | null;
 }
 
+export interface IngestionEvent {
+  domain: string;
+  ok: boolean;
+  reason?: string;
+}
+
 export interface IngestionRunDTO {
   id: string;
   query: string;
   status: 'running' | 'done' | 'error';
+  stage: string | null;
   foundCount: number;
+  processedCount: number;
   savedCount: number;
   discardedCount: number;
+  events: IngestionEvent[] | null;
   error: string | null;
   startedAt: string;
   finishedAt: string | null;

@@ -9,6 +9,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Loading } from '@/components/ui/Loading';
 import { ScoreRing } from '@/components/radar/ScoreRing';
 import { Sparkline } from '@/components/radar/Sparkline';
+import { MiningLoader } from '@/components/radar/MiningLoader';
 import type { OfferDTO, IngestionRunDTO } from '@forja/types';
 
 type Trend = {
@@ -37,6 +38,8 @@ export default function RadarPage() {
   const [market, setMarket] = useState<Market>('all');
   const [niche, setNiche] = useState<string>('all');
   const [sort, setSort] = useState<'days' | 'score' | 'scans'>('days');
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [loaderOpen, setLoaderOpen] = useState(false);
 
   const offers = useQuery({ queryKey: ['offers'], queryFn: () => api<OfferDTO[]>('/radar/offers') });
   const trends = useQuery({ queryKey: ['trends'], queryFn: () => api<Trend[]>('/radar/trends') });
@@ -49,7 +52,19 @@ export default function RadarPage() {
 
   const ingest = useMutation({
     mutationFn: () => apiPost<IngestionRunDTO>('/radar/ingest', {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['runs'] }),
+    onSuccess: (run) => {
+      setActiveRunId(run.id);
+      setLoaderOpen(true);
+      qc.invalidateQueries({ queryKey: ['runs'] });
+    },
+  });
+
+  // Polling rápido da rodada ativa enquanto o loader está aberto.
+  const activeRun = useQuery({
+    queryKey: ['run', activeRunId],
+    queryFn: () => api<IngestionRunDTO>(`/radar/runs/${activeRunId}`),
+    enabled: !!activeRunId && loaderOpen,
+    refetchInterval: (q) => (q.state.data?.status === 'running' ? 1200 : false),
   });
   const curate = useMutation({
     mutationFn: (v: { id: string; saved: boolean }) => apiPatch(`/radar/offers/${v.id}`, { saved: v.saved }),
@@ -64,7 +79,13 @@ export default function RadarPage() {
   });
 
   const lastRun = runs.data?.[0];
-  const running = lastRun?.status === 'running' || ingest.isPending;
+  const running = lastRun?.status === 'running' || ingest.isPending || activeRun.data?.status === 'running';
+
+  const closeLoader = () => {
+    setLoaderOpen(false);
+    qc.invalidateQueries({ queryKey: ['offers'] });
+    qc.invalidateQueries({ queryKey: ['shortlist'] });
+  };
 
   const lastDoneRef = useRef<string | null>(null);
   useEffect(() => {
@@ -74,6 +95,14 @@ export default function RadarPage() {
       qc.invalidateQueries({ queryKey: ['shortlist'] });
     }
   }, [lastRun?.status, lastRun?.id, qc]);
+
+  // Atualiza as listas assim que a rodada ativa termina (loader ainda aberto).
+  useEffect(() => {
+    if (activeRun.data?.status === 'done') {
+      qc.invalidateQueries({ queryKey: ['offers'] });
+      qc.invalidateQueries({ queryKey: ['shortlist'] });
+    }
+  }, [activeRun.data?.status, qc]);
 
   const niches = useMemo(() => {
     const s = new Set<string>();
@@ -362,6 +391,8 @@ export default function RadarPage() {
           </div>
         </div>
       )}
+
+      {loaderOpen && activeRun.data && <MiningLoader run={activeRun.data} onClose={closeLoader} />}
     </div>
   );
 }

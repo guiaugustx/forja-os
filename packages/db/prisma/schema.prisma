@@ -87,9 +87,12 @@ model IngestionRun {
   id             String    @id @default(cuid())
   query          String
   status         String    @default("running") // running | done | error
+  stage          String? // atividade atual (mensagem exibida no loader)
   foundCount     Int       @default(0)
+  processedCount Int       @default(0)
   savedCount     Int       @default(0)
   discardedCount Int       @default(0)
+  events         Json? // feed de decisões recentes [{domain, ok, reason}]
   error          String?
   startedAt      DateTime  @default(now())
   finishedAt     DateTime?
