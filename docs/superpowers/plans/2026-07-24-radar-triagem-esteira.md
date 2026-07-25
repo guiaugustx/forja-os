@@ -1536,9 +1536,31 @@ function parseGrowth(pct: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-async function fetchHtml(url: string): Promise<string | null> {
-  const page = await fetchAndExtract(url);
-  return page.ok ? page.text : null;
+/**
+ * HTML cru, para a cascata de resolução da página de vendas.
+ *
+ * Não dá para reusar `fetchAndExtract` aqui: ela devolve o texto do body já
+ * limpo, sem `<head>` e sem atributos — exatamente onde vivem og:url, canonical
+ * e os href que a cascata procura.
+ */
+async function fetchRawHtml(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (compatible; ForjaBot/0.1; +https://forja.local) AppleWebKit/537.36',
+        Accept: 'text/html,application/xhtml+xml',
+      },
+      redirect: 'follow',
+    }).finally(() => clearTimeout(timeout));
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -1571,7 +1593,7 @@ export async function enrich(job: Job<EnrichJobData>) {
     if (isCheckout && candidate) {
       const resolved = await resolveSalesPage(candidate.url, candidate.productName, {
         referer: candidate.referer,
-        fetchHtml,
+        fetchHtml: fetchRawHtml,
         findInPool: async (name) => {
           const hit = await prisma.candidate.findFirst({
             where: {

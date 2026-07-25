@@ -8,6 +8,10 @@ const baseURL = process.env.SILICONFLOW_BASE_URL ?? 'https://api.siliconflow.com
 
 export const MODEL = process.env.SILICONFLOW_MODEL ?? 'Qwen/Qwen2.5-72B-Instruct';
 
+// Modelos de "reasoning" (OpenRouter) gastam tokens pensando e truncam/vazam o JSON.
+// Com AI_DISABLE_REASONING=true, mandamos reasoning:{enabled:false} para saída direta.
+const disableReasoning = (process.env.AI_DISABLE_REASONING ?? '').toLowerCase() === 'true';
+
 // Sem chave → modo simulado (devolve mocks coerentes) para o fluxo rodar em dev.
 export const isSimulated = apiKey.length === 0;
 
