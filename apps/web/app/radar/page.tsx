@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Chip } from '@heroui/react';
 import { api, apiPost, apiPatch } from '@/lib/api';
 import { Panel } from '@/components/ui/Panel';
@@ -38,9 +38,11 @@ interface Trend {
   series: number[] | null;
 }
 
-// Erros de negócio (409 de "já triado", "enriquecimento já começou" etc.) vêm
-// como texto simples no corpo do fetch que falhou — a mensagem já é a que o
-// backend escreveu para um humano ler, então só precisamos exibi-la.
+// Erros de negócio (409 de "já triado", "enriquecimento já começou" etc.) chegam
+// aqui como `ApiError` — `lib/api.ts` já leu o corpo `{ message }` que o Nest
+// devolve e colocou a frase em português no `.message`, então só precisamos
+// exibi-la. Só cai no fallback genérico quando o corpo não trouxer mensagem
+// utilizável (ex.: API totalmente fora do ar, sem resposta JSON nenhuma).
 function errorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error && err.message) return err.message;
   return fallback;
@@ -53,7 +55,20 @@ export default function RadarPage() {
   const [sort, setSort] = useState<SortKey>('hits');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [undoId, setUndoId] = useState<string | null>(null);
+  const [undoDecision, setUndoDecision] = useState<Decision | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Ids das rodadas criadas pelo último clique em "Colher" nesta sessão — usados
+  // só para agregar o resumo (correção 9); antes do primeiro clique, cai no
+  // fallback de mostrar a rodada mais recente conhecida.
+  const [dispatchRunIds, setDispatchRunIds] = useState<string[] | null>(null);
+
+  // Só existe um timer de desfazer por vez: sem isso, decidir duas linhas em
+  // sequência faz o timer da primeira fechar a faixa da segunda antes da hora,
+  // e o timer sobrevive ao desmonte da página se nunca for limpo.
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+  }, []);
 
   const sources = useQuery({
     queryKey: ['sources'],
@@ -67,6 +82,22 @@ export default function RadarPage() {
       q.state.data?.some((r) => r.status === 'running') ? 2000 : false,
   });
 
+  // Detecta a transição de uma rodada de "running" para terminada e só então
+  // atualiza a fila sozinha — comparar por id evita invalidar de novo a cada
+  // polling (o status já terminado não dispara uma segunda vez) e evita loop
+  // (a invalidação atinge só ['candidates'], nunca ['runs']).
+  const prevRunStatuses = useRef<Map<string, IngestionRunDTO['status']>>(new Map());
+  useEffect(() => {
+    if (!runs.data) return;
+    let justFinished = false;
+    for (const r of runs.data) {
+      const prevStatus = prevRunStatuses.current.get(r.id);
+      if (prevStatus === 'running' && r.status !== 'running') justFinished = true;
+      prevRunStatuses.current.set(r.id, r.status);
+    }
+    if (justFinished) qc.invalidateQueries({ queryKey: ['candidates'] });
+  }, [runs.data, qc]);
+
   const status = tab === 'discarded' ? 'discarded_auto' : 'pending';
   const queryString = useMemo(() => {
     const p = new URLSearchParams({ status, sort });
@@ -74,9 +105,17 @@ export default function RadarPage() {
     return p.toString();
   }, [status, sort, sourceId]);
 
-  const candidates = useQuery({
+  // Fila em massa: centenas/milhares de candidatos, não só a primeira página.
+  // `useInfiniteQuery` é o caminho direto do TanStack para consumir o
+  // `nextCursor` que a API já devolve, carregando mais sem recarregar a tela.
+  const candidates = useInfiniteQuery({
     queryKey: ['candidates', queryString],
-    queryFn: () => api<CandidateListDTO>(`/radar/candidates?${queryString}`),
+    queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
+      api<CandidateListDTO>(
+        `/radar/candidates?${queryString}${pageParam ? `&cursor=${pageParam}` : ''}`,
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: tab === 'triage' || tab === 'discarded',
   });
 
@@ -99,7 +138,11 @@ export default function RadarPage() {
   const harvest = useMutation({
     mutationFn: () =>
       apiPost<IngestionRunDTO[]>('/radar/harvest', sourceId === 'all' ? {} : { sourceId }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['runs'] }),
+    onSuccess: (created) => {
+      setDispatchRunIds(created.map((r) => r.id));
+      setNotice(null);
+      qc.invalidateQueries({ queryKey: ['runs'] });
+    },
     onError: (err) => setNotice(errorMessage(err, 'Não consegui disparar a colheita.')),
   });
 
@@ -108,12 +151,28 @@ export default function RadarPage() {
     qc.invalidateQueries({ queryKey: ['offers'] });
   };
 
+  const armUndo = (id: string, decision: Decision) => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndoId(id);
+    setUndoDecision(decision);
+    undoTimer.current = setTimeout(() => {
+      setUndoId((cur) => (cur === id ? null : cur));
+    }, 8000);
+  };
+
+  const clearUndo = () => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = null;
+    setUndoId(null);
+    setUndoDecision(null);
+  };
+
   const decide = useMutation({
     mutationFn: (v: { id: string; decision: Decision }) =>
       apiPatch(`/radar/candidates/${v.id}`, { decision: v.decision }),
     onSuccess: (_d, v) => {
-      setUndoId(v.id);
-      setTimeout(() => setUndoId((cur) => (cur === v.id ? null : cur)), 8000);
+      armUndo(v.id, v.decision);
+      setNotice(null);
       refreshLists();
     },
     // 409 mais comum aqui: o candidato já foi triado por outra aba/lote — a
@@ -135,47 +194,77 @@ export default function RadarPage() {
         setNotice(
           `${res.succeeded.length} aplicados, ${res.failed.length} falharam (ex.: ${res.failed[0].reason}).`,
         );
+      } else {
+        setNotice(null);
       }
     },
     onError: (err) => setNotice(errorMessage(err, 'Não consegui aplicar a decisão em lote.')),
   });
 
+  // "Desfazer" precisa chamar a rota certa para a decisão que foi tomada: a
+  // API grava descarte como `discarded_manual`, e a rota `undo` só aceita
+  // candidatos `promoted` — usá-la depois de um ✕ é 409 garantido. `restore` é
+  // quem reverte um descarte; o operador não precisa saber que são rotas
+  // diferentes, só que "Desfazer" funciona.
   const undo = useMutation({
     mutationFn: (id: string) => apiPost(`/radar/candidates/${id}/undo`),
     onSuccess: () => {
-      setUndoId(null);
+      clearUndo();
+      setNotice(null);
       refreshLists();
     },
     // 409: o enriquecimento já começou (ou já terminou) e não é mais seguro
     // desfazer sozinho — a tela precisa dizer isso em vez de fingir sucesso.
     onError: (err) => {
       setNotice(errorMessage(err, 'Não foi possível desfazer — o enriquecimento já pode ter começado.'));
-      setUndoId(null);
+      clearUndo();
     },
   });
 
   const restore = useMutation({
     mutationFn: (id: string) => apiPost(`/radar/candidates/${id}/restore`),
-    onSuccess: refreshLists,
+    onSuccess: () => {
+      clearUndo();
+      setNotice(null);
+      refreshLists();
+    },
     onError: (err) => setNotice(errorMessage(err, 'Não consegui trazer esse candidato de volta.')),
   });
 
   const setStage = useMutation({
     mutationFn: (v: { id: string; stage: 'pipeline' | 'discarded' }) =>
       apiPatch(`/radar/offers/${v.id}`, { stage: v.stage }),
-    onSuccess: refreshLists,
+    onSuccess: () => {
+      setNotice(null);
+      refreshLists();
+    },
     onError: (err) => setNotice(errorMessage(err, 'Não consegui atualizar essa oferta.')),
   });
 
   const retry = useMutation({
     mutationFn: (id: string) => apiPost(`/radar/offers/${id}/retry-enrichment`),
-    onSuccess: refreshLists,
+    onSuccess: () => {
+      setNotice(null);
+      refreshLists();
+    },
     onError: (err) => setNotice(errorMessage(err, 'Não consegui reenfileirar o enriquecimento.')),
   });
 
-  const items = candidates.data?.items ?? [];
+  const items = useMemo(
+    () => candidates.data?.pages.flatMap((p) => p.items) ?? [],
+    [candidates.data],
+  );
+  const total = candidates.data?.pages[0]?.total ?? 0;
   const running = runs.data?.some((r) => r.status === 'running') || harvest.isPending;
-  const lastRun = runs.data?.[0];
+
+  // Colher "todas as fontes" dispara uma rodada por fonte (7 hoje); mostrar só
+  // a mais recente escondia o resultado da varredura inteira. Enquanto o lote
+  // do último clique em "Colher" ainda está nas rodadas conhecidas, o resumo
+  // soma os contadores de todas elas; fora isso (ex.: reload da página sem
+  // nenhum clique nesta sessão), cai no fallback de mostrar só a última rodada.
+  const summaryRuns = dispatchRunIds
+    ? (runs.data?.filter((r) => dispatchRunIds.includes(r.id)) ?? [])
+    : (runs.data?.slice(0, 1) ?? []);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -199,19 +288,24 @@ export default function RadarPage() {
             Descoberta e triagem. A colheita é barata e em massa; a IA só entra no que você promove.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={sourceId}
-            onChange={(e) => setSourceId(e.target.value)}
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[13px]"
-          >
-            <option value="all">Todas as fontes</option>
-            {sources.data?.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-start gap-2">
+          <div className="flex flex-col gap-1">
+            <select
+              value={sourceId}
+              onChange={(e) => setSourceId(e.target.value)}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[13px]"
+            >
+              <option value="all">Todas as fontes</option>
+              {sources.data?.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            {sources.isError && (
+              <span className="text-[11px] text-red-400">Não consegui carregar as fontes.</span>
+            )}
+          </div>
           <Button variant="primary" isDisabled={running} onPress={() => harvest.mutate()}>
             {running ? 'Colhendo…' : '✦ Colher'}
           </Button>
@@ -227,13 +321,30 @@ export default function RadarPage() {
         </div>
       )}
 
-      {lastRun && (
+      {summaryRuns.length > 0 && (
         <Panel className="px-4 py-3 text-[12.5px] text-neutral-400">
-          <b className="text-neutral-200">{lastRun.source?.name ?? lastRun.query}</b> ·{' '}
-          {lastRun.stage ?? lastRun.status} — {lastRun.rawHits.toLocaleString('pt-BR')} varridos ·{' '}
-          {lastRun.newCandidates} novos · {lastRun.autoDiscarded} filtrados ·{' '}
-          <b className="text-neutral-200">{lastRun.queuedForTriage} na fila</b>
-          {lastRun.status === 'partial' && (
+          {summaryRuns.length === 1 ? (
+            <>
+              <b className="text-neutral-200">{summaryRuns[0].source?.name ?? summaryRuns[0].query}</b>{' '}
+              · {summaryRuns[0].stage ?? summaryRuns[0].status} —{' '}
+              {summaryRuns[0].rawHits.toLocaleString('pt-BR')} varridos ·{' '}
+              {summaryRuns[0].newCandidates} novos · {summaryRuns[0].autoDiscarded} filtrados ·{' '}
+              <b className="text-neutral-200">{summaryRuns[0].queuedForTriage} na fila</b>
+            </>
+          ) : (
+            <>
+              <b className="text-neutral-200">{summaryRuns.length} fontes</b> ·{' '}
+              {summaryRuns.some((r) => r.status === 'running') ? 'colhendo' : 'concluído'} —{' '}
+              {summaryRuns.reduce((n, r) => n + r.rawHits, 0).toLocaleString('pt-BR')} varridos ·{' '}
+              {summaryRuns.reduce((n, r) => n + r.newCandidates, 0)} novos ·{' '}
+              {summaryRuns.reduce((n, r) => n + r.autoDiscarded, 0)} filtrados ·{' '}
+              <b className="text-neutral-200">
+                {summaryRuns.reduce((n, r) => n + r.queuedForTriage, 0)} na fila
+              </b>{' '}
+              · {summaryRuns.filter((r) => r.status !== 'running').length}/{summaryRuns.length} fontes concluídas
+            </>
+          )}
+          {summaryRuns.some((r) => r.status === 'partial') && (
             <Chip className="ml-2" size="sm" variant="soft" color="warning">
               parcial — a próxima rodada continua daqui
             </Chip>
@@ -248,6 +359,7 @@ export default function RadarPage() {
             onClick={() => {
               setTab(k);
               setSelected(new Set());
+              setNotice(null);
             }}
             className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2 text-[13.5px] font-semibold transition-colors ${
               tab === k
@@ -257,9 +369,7 @@ export default function RadarPage() {
           >
             {label}
             {k === tab && candidates.data && (tab === 'triage' || tab === 'discarded') && (
-              <span className="rounded-full bg-white/10 px-1.5 text-[11px]">
-                {candidates.data.total}
-              </span>
+              <span className="rounded-full bg-white/10 px-1.5 text-[11px]">{total}</span>
             )}
           </button>
         ))}
@@ -268,7 +378,15 @@ export default function RadarPage() {
       {undoId && (
         <div className="flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-[13px]">
           <span>Decisão aplicada.</span>
-          <Button size="sm" variant="ghost" onPress={() => undo.mutate(undoId)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            isDisabled={undo.isPending || restore.isPending}
+            onPress={() => {
+              if (undoDecision === 'discard') restore.mutate(undoId);
+              else undo.mutate(undoId);
+            }}
+          >
             Desfazer
           </Button>
         </div>
@@ -289,7 +407,7 @@ export default function RadarPage() {
 
             {selected.size > 0 && tab === 'triage' && (
               <div className="ml-auto flex items-center gap-2 rounded-lg bg-white/10 px-3 py-1.5">
-                <span className="text-[12.5px]">{selected.size} selecionados</span>
+                <span className="text-[12.5px]">{selected.size} selecionados (dos carregados)</span>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -316,6 +434,9 @@ export default function RadarPage() {
           </div>
 
           {candidates.isLoading && <Loading label="Carregando a fila…" />}
+          {candidates.isError && (
+            <Panel className="p-4 text-red-400">Não consegui carregar a fila (API offline?).</Panel>
+          )}
           {candidates.data && items.length === 0 && (
             <Panel className="p-8 text-center text-[13.5px] text-neutral-500">
               {tab === 'triage'
@@ -355,22 +476,48 @@ export default function RadarPage() {
               ))}
             </Panel>
           )}
+
+          {items.length > 0 && (
+            <div className="flex items-center justify-between text-[11.5px] text-neutral-500">
+              <span>
+                Mostrando {items.length.toLocaleString('pt-BR')} de {total.toLocaleString('pt-BR')}
+              </span>
+              {candidates.hasNextPage && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  isDisabled={candidates.isFetchingNextPage}
+                  onPress={() => candidates.fetchNextPage()}
+                >
+                  {candidates.isFetchingNextPage ? 'Carregando…' : 'Carregar mais'}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {tab === 'analysis' && (
-        <AnalysisCards
-          offers={analysis.data ?? []}
-          loading={analysis.isLoading}
-          onPromote={(id) => setStage.mutate({ id, stage: 'pipeline' })}
-          onDiscard={(id) => setStage.mutate({ id, stage: 'discarded' })}
-          onRetry={(id) => retry.mutate(id)}
-        />
-      )}
+      {tab === 'analysis' &&
+        (analysis.isError ? (
+          <Panel className="p-4 text-red-400">
+            Não consegui carregar a fila de análise (API offline?).
+          </Panel>
+        ) : (
+          <AnalysisCards
+            offers={analysis.data ?? []}
+            loading={analysis.isLoading}
+            onPromote={(id) => setStage.mutate({ id, stage: 'pipeline' })}
+            onDiscard={(id) => setStage.mutate({ id, stage: 'discarded' })}
+            onRetry={(id) => retry.mutate(id)}
+          />
+        ))}
 
       {tab === 'trends' && (
         <>
           {trends.isLoading && <Loading label="Carregando trends…" />}
+          {trends.isError && (
+            <Panel className="p-4 text-red-400">Não consegui carregar as trends (API offline?).</Panel>
+          )}
           {trends.data && trends.data.length === 0 && (
             <Panel className="p-8 text-center text-[13.5px] text-neutral-500">
               Sem trends por enquanto — a demanda entra com a chave do SerpApi.

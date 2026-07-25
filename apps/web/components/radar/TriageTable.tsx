@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { Button, Chip } from '@heroui/react';
 import type { CandidateDTO } from '@forja/types';
 
@@ -24,6 +25,18 @@ function fmtPrice(cents: number | null): string {
 // pequeno, ampliando só no hover.
 export function TriageTable({ items, selected, onToggle, onToggleAll, onDecide, busy }: Props) {
   const allChecked = items.length > 0 && items.every((c) => selected.has(c.id));
+  const someChecked = items.some((c) => selected.has(c.id));
+
+  // "Selecionar todos" só alcança o que já foi carregado nesta tela (a fila
+  // real costuma ter milhares) — o rótulo e o indeterminate deixam isso
+  // honesto. `indeterminate` não existe como prop de `input`, só como
+  // propriedade imperativa do elemento, daí o ref.
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = someChecked && !allChecked;
+    }
+  }, [someChecked, allChecked]);
 
   return (
     <div className="overflow-x-auto">
@@ -31,7 +44,13 @@ export function TriageTable({ items, selected, onToggle, onToggleAll, onDecide, 
         <thead>
           <tr className="text-left text-[11px] uppercase tracking-wide text-neutral-500">
             <th className="w-8 p-2">
-              <input type="checkbox" checked={allChecked} onChange={onToggleAll} aria-label="Selecionar todos" />
+              <input
+                ref={headerCheckboxRef}
+                type="checkbox"
+                checked={allChecked}
+                onChange={onToggleAll}
+                aria-label="Selecionar todos os carregados"
+              />
             </th>
             <th className="w-16 p-2" />
             <th className="p-2">Oferta</th>
