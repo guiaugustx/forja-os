@@ -8,7 +8,8 @@
     "start": "dotenv -e ../../.env -- node dist/index.js",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "recon": "dotenv -e ../../.env -- tsx scripts/recon-sources.ts"
   },
   "dependencies": {
     "@forja/ai": "workspace:*",
