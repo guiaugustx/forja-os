@@ -15,6 +15,81 @@ datasource db {
 // RADAR — motor de mineração de ofertas e tendências
 // ============================================================
 
+enum HarvestKind {
+  resource // o domínio escaneado é a página de vendas (utmify, ConverteAI, Panda)
+  checkout // a página escaneada é o gateway; quem identifica a oferta é a URL
+}
+
+// Fonte de mineração: uma query urlscan com cursor próprio, para que cada rodada
+// continue de onde a anterior parou em vez de re-varrer o topo dos 10.000.
+model HarvestSource {
+  id          String        @id @default(cuid())
+  name        String
+  query       String        @unique
+  kind        HarvestKind
+  enabled     Boolean       @default(true)
+  cursor      String? // search_after do urlscan
+  minHitCount Int           @default(1) // limiar do pré-filtro de circulação
+  maxAgeDays  Int           @default(90) // idem
+  lastRunAt   DateTime?
+  candidates  Candidate[]
+  runs        IngestionRun[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+enum CandidateStatus {
+  pending
+  discarded_auto
+  discarded_manual
+  promoted
+}
+
+// Pool acumulativo de candidatos crus. Barato: só o que a varredura do urlscan
+// já devolveu. Cresce para dezenas de milhares de linhas e nunca é reapresentado
+// depois de triado — garantia dada pelo unique de dedupeKey, não por lógica.
+model Candidate {
+  id            String          @id @default(cuid())
+  sourceId      String
+  source        HarvestSource   @relation(fields: [sourceId], references: [id])
+  dedupeKey     String          @unique
+  url           String
+  domain        String
+  title         String?
+  screenshotUrl String?
+  referer       String? // pista para resolver a página de vendas de um checkout
+  productName   String? // fontes de checkout
+  priceCents    Int? // fontes de checkout
+  gateway       String? // fontes de checkout
+  hitCount      Int             @default(1) // proxy de circulação, sai de graça da varredura
+  firstSeenAt   DateTime?
+  lastSeenAt    DateTime?
+  daysRunning   Int             @default(0)
+  status        CandidateStatus @default(pending)
+  discardReason String?
+  triagedAt     DateTime?
+  firstRunId    String
+  offer         Offer?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([status, hitCount])
+  @@index([sourceId, status])
+}
+
+enum OfferStage {
+  analysis // fila de análise: dossiê pronto, promove ou descarta
+  pipeline // esteira de modelagem
+  discarded
+}
+
+enum EnrichmentState {
+  pending
+  running
+  done
+  failed
+}
+
 enum OpportunityStatus {
   open
   promoted
@@ -70,7 +145,12 @@ model Offer {
   scanCount        Int? // nº de scans no urlscan (intensidade)
   activeAdsCount   Int           @default(0)
   sampleCreatives  Json? // [{url, format, ...}]
-  saved            Boolean       @default(false)
+  candidateId      String?         @unique
+  candidate        Candidate?      @relation(fields: [candidateId], references: [id])
+  stage            OfferStage      @default(analysis)
+  enrichment       EnrichmentState @default(pending)
+  enrichmentError  String?
+  alerts           Json? // ['produto-fisico','nao-e-pagina-de-vendas','sem-trafego','sem-conteudo','pagina-de-vendas-nao-localizada']
   opportunities    Opportunity[]
   drafts           OfferDraft[]
   createdAt        DateTime      @default(now())
@@ -80,6 +160,7 @@ model Offer {
   @@index([market, niche])
   @@index([daysRunning])
   @@index([opportunityScore])
+  @@index([stage])
 }
 
 // Registro de cada rodada de ingestão (feedback do botão "Rodar ingestão").
@@ -96,19 +177,22 @@ model SeenDomain {
   @@index([seenAt])
 }
 
+// Registro de cada rodada de colheita (feedback do botão "Colher").
 model IngestionRun {
-  id             String    @id @default(cuid())
-  query          String
-  status         String    @default("running") // running | done | error
-  stage          String? // atividade atual (mensagem exibida no loader)
-  foundCount     Int       @default(0)
-  processedCount Int       @default(0)
-  savedCount     Int       @default(0)
-  discardedCount Int       @default(0)
-  events         Json? // feed de decisões recentes [{domain, ok, reason}]
-  error          String?
-  startedAt      DateTime  @default(now())
-  finishedAt     DateTime?
+  id              String         @id @default(cuid())
+  query           String
+  sourceId        String?
+  source          HarvestSource? @relation(fields: [sourceId], references: [id])
+  status          String         @default("running") // running | done | partial | error
+  stage           String? // atividade atual, exibida no loader
+  rawHits         Int            @default(0) // resultados brutos varridos
+  newCandidates   Int            @default(0) // chaves inéditas
+  autoDiscarded   Int            @default(0) // mortos pelo pré-filtro
+  queuedForTriage Int            @default(0) // chegaram à sua fila
+  events          Json? // feed de decisões recentes [{key, ok, reason}]
+  error           String?
+  startedAt       DateTime       @default(now())
+  finishedAt      DateTime?
 }
 
 enum TrendStatus {

@@ -11,6 +11,7 @@
     "push": "dotenv -e ../../.env -- prisma db push",
     "migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "seed:sources": "dotenv -e ../../.env -- tsx prisma/seed-sources.ts",
     "studio": "dotenv -e ../../.env -- prisma studio"
   },
   "dependencies": {
