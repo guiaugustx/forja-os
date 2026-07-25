@@ -39,6 +39,9 @@ services:
       REDIS_URL: redis://redis:6379
       API_PORT: '3333'
       WEB_ORIGIN: ${WEB_ORIGIN}
+      JWT_SECRET: ${JWT_SECRET:-forja-dev-secret-change-me}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       AI_PROVIDER: ${AI_PROVIDER:-openrouter}
       AI_FALLBACK_PROVIDER: ${AI_FALLBACK_PROVIDER:-}
       AI_OPENAI_API_KEY: ${AI_OPENAI_API_KEY:-}

@@ -1,4 +1,18 @@
+import { getToken, clearToken } from './auth';
+
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333';
+
+function authHeader(): Record<string, string> {
+  const t = getToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+// 401 → sessão expirada/ausente: limpa o token e volta ao login.
+function handleUnauthorized() {
+  if (typeof window === 'undefined') return;
+  clearToken();
+  if (window.location.pathname !== '/login') window.location.href = '/login';
+}
 
 // Erro de API que carrega o status HTTP de forma acessível a quem chama —
 // a página usa isso para, por exemplo, tratar um 409 (regra de negócio)
@@ -35,8 +49,9 @@ async function readErrorMessage(res: Response, fallback: string): Promise<string
 }
 
 export async function api<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}/api${path}`, { cache: 'no-store' });
+  const res = await fetch(`${BASE}/api${path}`, { cache: 'no-store', headers: { ...authHeader() } });
   if (!res.ok) {
+    if (res.status === 401) handleUnauthorized();
     throw new ApiError(await readErrorMessage(res, `API ${path} → ${res.status}`), res.status);
   }
   return res.json() as Promise<T>;
@@ -45,11 +60,12 @@ export async function api<T>(path: string): Promise<T> {
 async function mutate<T>(path: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}/api${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: 'no-store',
   });
   if (!res.ok) {
+    if (res.status === 401) handleUnauthorized();
     throw new ApiError(
       await readErrorMessage(res, `API ${method} ${path} → ${res.status}`),
       res.status,

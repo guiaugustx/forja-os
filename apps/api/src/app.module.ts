@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
+import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { ProductsModule } from './products/products.module';
 import { RadarModule } from './radar/radar.module';
@@ -14,6 +15,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     QueueModule,
+    AuthModule,
     HealthModule,
     ProductsModule,
     RadarModule,

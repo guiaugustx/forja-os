@@ -12,6 +12,25 @@ datasource db {
 }
 
 // ============================================================
+// AUTENTICAÇÃO
+// ============================================================
+
+enum UserRole {
+  admin
+  member
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  role         UserRole @default(member)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ============================================================
 // RADAR — motor de mineração de ofertas e tendências
 // ============================================================
 
