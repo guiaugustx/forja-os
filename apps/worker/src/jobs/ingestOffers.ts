@@ -70,13 +70,23 @@ export async function ingestOffers(job: Job<IngestJobData>) {
     found = hits.length;
     await progress(found ? `${found} páginas encontradas. Analisando…` : 'Nenhuma página encontrada.');
 
+    let aiDown = false;
     for (const hit of hits) {
       await progress(`🧠 Analisando ${hit.domain}…`);
       let outcome: { ok: boolean; reason?: string };
       try {
         outcome = await processCandidate(hit);
       } catch (err) {
-        outcome = { ok: false, reason: `erro: ${(err as Error).message}` };
+        const msg = (err as Error).message || String(err);
+        // Erro de IA/infra (saldo, 403, rate limit, timeout) NÃO é culpa da oferta:
+        // aborta o run e NÃO memoriza, para reprocessar quando a IA voltar.
+        if (/\b40[13]\b|balance|insufficient|rate.?limit|\b429\b|timeout|ECONN/i.test(msg)) {
+          aiDown = true;
+          events.unshift({ domain: hit.domain, ok: false, reason: 'ia-indisponivel' });
+          console.error(`[ingest] IA indisponível — abortando: ${msg}`);
+          break;
+        }
+        outcome = { ok: false, reason: `erro: ${msg}` };
       }
       processed++;
       if (outcome.ok) {
@@ -89,28 +99,34 @@ export async function ingestOffers(job: Job<IngestJobData>) {
       }
       if (events.length > 24) events.length = 24;
 
-      // Registra na memória para os próximos runs pularem este domínio.
-      await prisma.seenDomain.upsert({
-        where: { domain: hit.domain },
-        update: { pageUrl: hit.pageUrl, outcome: outcome.ok ? 'saved' : 'discarded', reason: outcome.reason ?? null },
-        create: { domain: hit.domain, pageUrl: hit.pageUrl, outcome: outcome.ok ? 'saved' : 'discarded', reason: outcome.reason ?? null },
-      });
+      // Só memoriza outcomes reais (salvos ou descartes por conteúdo) — nunca erros
+      // transitórios — para o domínio ser reprocessado num próximo run.
+      if (!outcome.reason?.startsWith('erro')) {
+        await prisma.seenDomain.upsert({
+          where: { domain: hit.domain },
+          update: { pageUrl: hit.pageUrl, outcome: outcome.ok ? 'saved' : 'discarded', reason: outcome.reason ?? null },
+          create: { domain: hit.domain, pageUrl: hit.pageUrl, outcome: outcome.ok ? 'saved' : 'discarded', reason: outcome.reason ?? null },
+        });
+      }
     }
 
     await prisma.ingestionRun.update({
       where: { id: runId },
       data: {
-        status: 'done',
-        stage: `Concluído — ${saved} salvas, ${discarded} descartadas`,
+        status: aiDown ? 'error' : 'done',
+        stage: aiDown
+          ? '⚠️ IA indisponível — saldo do SiliconFlow insuficiente. Recarregue e rode de novo.'
+          : `Concluído — ${saved} salvas, ${discarded} descartadas`,
         foundCount: found,
         processedCount: processed,
         savedCount: saved,
         discardedCount: discarded,
         events: events.slice(0, 24) as unknown as Prisma.InputJsonValue,
+        error: aiDown ? 'SiliconFlow: saldo insuficiente' : null,
         finishedAt: new Date(),
       },
     });
-    return { ok: true, found, saved, discarded };
+    return { ok: !aiDown, found, saved, discarded };
   } catch (err) {
     await prisma.ingestionRun.update({
       where: { id: runId },
