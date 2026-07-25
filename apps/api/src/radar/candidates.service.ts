@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
@@ -9,28 +10,26 @@ import { Prisma } from '@forja/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueueService } from '../queue/queue.service';
 import type { CandidateListQuery } from './radar.dto';
+import { enrichJobId } from './enrich-job';
 
 type Decision = 'pipeline' | 'analysis' | 'discard';
 
-// Janela do desfazer. O enriquecimento entra atrasado para que uma decisão
-// revertida nesse intervalo não gaste download nem token de LLM.
+// Atraso do job de enrich. Existe para dar tempo do desfazer cancelar o job
+// antes que ele comece a gastar download/IA — mas quem decide se o desfazer
+// ainda é seguro é o estado real do job no Redis (ver `undo()`), não o
+// relógio: um relógio só promete um número, o job pode ficar elegível para
+// processar antes ou depois dele por variação de carga do worker.
 const UNDO_WINDOW_MS = 8_000;
 
-// Folga sobre a janela de desfazer nominal: o botão "desfazer" da UI some depois
-// de UNDO_WINDOW_MS, mas o request ainda precisa viajar rede + fila até chegar
-// aqui. Sem essa folga, um desfazer clicado no último instante da janela visível
-// já chegaria "atrasado" no servidor e seria recusado sem necessidade.
-const UNDO_GRACE_MS = 2_000;
-
-// jobId determinístico do enrich de uma oferta. Sem ':' — o BullMQ 5.81 tolera
-// ':' apenas com exatamente 3 segmentos por compat legado (o próprio código da
-// lib marca isso como TODO para remoção num major futuro), então evitamos
-// depender dessa muleta e usamos hífen.
-function enrichJobId(offerId: string): string {
-  return `enrich-${offerId}`;
-}
-
 const PRISMA_UNIQUE_CONSTRAINT = 'P2002';
+
+// err.meta.target de um P2002 varia de formato entre providers do Prisma (às
+// vezes array de colunas, às vezes o nome do índice/constraint como string) —
+// normaliza pra uma string e testa "contém", em vez de assumir um formato só.
+function targetIncludes(target: unknown, column: string): boolean {
+  const str = Array.isArray(target) ? target.join(',') : String(target ?? '');
+  return str.includes(column);
+}
 
 @Injectable()
 export class CandidatesService {
@@ -59,14 +58,12 @@ export class CandidatesService {
           ? [{ lastSeenAt: { sort: 'desc', nulls: 'last' } }, { id: 'asc' }]
           : [{ hitCount: 'desc' }, { id: 'asc' }];
 
-    const take = params.take;
-
     let items;
     try {
       items = await this.prisma.client.candidate.findMany({
         where,
         orderBy,
-        take: take + 1,
+        take: params.take + 1,
         ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
         include: { source: { select: { id: true, name: true, kind: true } } },
       });
@@ -79,8 +76,8 @@ export class CandidatesService {
       throw err;
     }
 
-    const hasMore = items.length > take;
-    const page = hasMore ? items.slice(0, take) : items;
+    const hasMore = items.length > params.take;
+    const page = hasMore ? items.slice(0, params.take) : items;
     const total = await this.prisma.client.candidate.count({ where });
 
     return { items: page, nextCursor: hasMore ? page[page.length - 1].id : null, total };
@@ -148,10 +145,18 @@ export class CandidatesService {
         return created;
       });
     } catch (err) {
-      // @@unique([source, pageUrl]) — dois candidatos distintos com a mesma
-      // pageUrl (mesma página de vendas achada duas vezes) colidem aqui. 409
-      // legível em vez do 500 cru do Prisma.
+      // Offer tem duas constraints únicas e a checagem de status acima é TOCTOU:
+      // dois PATCH concorrentes no mesmo candidato passam ambos pela checagem
+      // (nenhum viu o outro ainda), e o segundo estoura aqui por candidateId —
+      // não por pageUrl duplicada. Sem distinguir as duas, o operador recebia
+      // sempre a mensagem de "página de vendas duplicada" e ia procurar uma
+      // duplicata que não existe, quando o certo era só recarregar a lista.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === PRISMA_UNIQUE_CONSTRAINT) {
+        if (targetIncludes(err.meta?.target, 'candidateId')) {
+          throw new ConflictException(
+            'Esse candidato acabou de ser triado por outra requisição; recarregue a lista antes de tentar de novo.',
+          );
+        }
         throw new ConflictException(
           'Já existe uma oferta para essa mesma página de vendas (outro candidato com a mesma URL já foi promovido).',
         );
@@ -182,14 +187,31 @@ export class CandidatesService {
   }
 
   async bulk(ids: string[], decision: Decision) {
-    // Descarte em lote é uma única escrita — o caso comum é marcar dezenas de
-    // linhas e matar todas de uma vez.
+    // A tela de triagem (ainda a ser escrita) trata as duas decisões com o
+    // mesmo componente — se descarte devolvesse só {count} e promoção
+    // devolvesse {count, succeeded, failed}, o cliente teria que tratar
+    // `failed` como possivelmente ausente conforme a decisão enviada. As duas
+    // ramificações abaixo sempre devolvem a mesma forma.
     if (decision === 'discard') {
-      const res = await this.prisma.client.candidate.updateMany({
+      // Descarte em lote continua sendo (no essencial) uma única escrita —
+      // mas para saber quais ids de fato viraram discarded_manual (e quais já
+      // não estavam mais pending) é preciso ler antes de escrever.
+      const eligible = await this.prisma.client.candidate.findMany({
         where: { id: { in: ids }, status: 'pending' },
-        data: { status: 'discarded_manual', discardReason: 'manual', triagedAt: new Date() },
+        select: { id: true },
       });
-      return { count: res.count };
+      const succeeded = eligible.map((c) => c.id);
+      if (succeeded.length > 0) {
+        await this.prisma.client.candidate.updateMany({
+          where: { id: { in: succeeded } },
+          data: { status: 'discarded_manual', discardReason: 'manual', triagedAt: new Date() },
+        });
+      }
+      const succeededSet = new Set(succeeded);
+      const failed = ids
+        .filter((id) => !succeededSet.has(id))
+        .map((id) => ({ id, reason: 'Candidato não encontrado ou já triado' }));
+      return { count: succeeded.length, succeeded, failed };
     }
 
     // Promoção em lote não pode abortar no meio: um id inválido no item 7 de 40
@@ -203,8 +225,15 @@ export class CandidatesService {
         await this.triage(id, decision);
         succeeded.push(id);
       } catch (err) {
-        const reason = err instanceof Error ? err.message : 'Erro desconhecido';
-        failed.push({ id, reason });
+        // Só captura falha legítima de item — as exceções HTTP que o Nest
+        // usa para recusar uma única linha (409 de já triado, 404 de id
+        // inexistente etc). Qualquer outra coisa é falha de infraestrutura
+        // (Postgres/Redis fora do ar): com 40 ids isso viraria silenciosamente
+        // "count: 0" com 201, escondendo um 5xx real e vazando a mensagem
+        // crua do driver pro cliente. Relança para aparecer como erro de
+        // servidor de verdade.
+        if (!(err instanceof HttpException)) throw err;
+        failed.push({ id, reason: err.message });
       }
     }
     return { count: succeeded.length, succeeded, failed };
@@ -221,54 +250,64 @@ export class CandidatesService {
     if (candidate.status !== 'promoted' || !candidate.offer) {
       throw new ConflictException('Só é possível desfazer um candidato recém-promovido.');
     }
-
-    // O botão "desfazer" da UI some poucos segundos depois da promoção, mas a
-    // rota em si não tinha nenhuma trava — aceitava desfazer dias depois e
-    // apagava a Offer em silêncio (as relações de Opportunity.offerId e
-    // OfferDraft.sourceOfferId são opcionais, então o Prisma não bloqueia).
-    // A janela aqui usa a mesma constante que atrasa o job de enrich, mais uma
-    // folga pequena (UNDO_GRACE_MS) para cobrir o tempo de rede do próprio
-    // request de desfazer — não é uma trava de segurança, é para não recusar
-    // um clique legítimo feito no último instante em que o botão ainda existia.
-    const elapsedMs = candidate.triagedAt ? Date.now() - candidate.triagedAt.getTime() : Infinity;
-    if (elapsedMs > UNDO_WINDOW_MS + UNDO_GRACE_MS) {
-      throw new ConflictException(
-        'Janela de desfazer expirada. Para remover essa oferta agora, descarte-a pela fila de Análise.',
-      );
-    }
+    const offer = candidate.offer;
 
     // Se já existe rascunho de modelagem derivado dessa oferta, desfazer
     // destruiria trabalho manual/IA já feito em cima dela — recusa em vez de
     // apagar silenciosamente.
-    if (candidate.offer.drafts.length > 0) {
+    if (offer.drafts.length > 0) {
       throw new ConflictException(
         'Essa oferta já tem rascunho de modelagem gerado; desfazer destruiria esse trabalho. Descarte pela fila de Análise em vez disso.',
       );
     }
 
-    const job = await this.queue.enrich.getJob(enrichJobId(candidate.offer.id));
-    let jobRemovalWarning: string | undefined;
+    // O botão "desfazer" da UI some poucos segundos depois da promoção, mas um
+    // relógio sozinho não é confiável pra decidir se ainda é seguro: o job de
+    // enrich entra atrasado (UNDO_WINDOW_MS), não numa data-limite, então o que
+    // sustenta a promessa de "ainda dá pra desfazer" é o estado real do job no
+    // Redis, não quanto tempo passou. Antes disso ficar assim: entre
+    // UNDO_WINDOW_MS e a folga que existia aqui, o job já podia estar elegível
+    // pra rodar — se estivesse ativo, a Offer era apagada mesmo com o worker
+    // escrevendo nela; se já tivesse concluído, sumia em silêncio a IA já gasta.
+    const job = await this.queue.enrich.getJob(enrichJobId(offer.id));
     if (job) {
+      const state = await job.getState();
+      if (state !== 'waiting' && state !== 'delayed') {
+        throw new ConflictException(
+          'O enriquecimento dessa oferta já começou (ou já terminou); não é mais seguro desfazer automaticamente. Descarte pela fila de Análise.',
+        );
+      }
       try {
         await job.remove();
       } catch (err) {
-        // Não engolir: se o job já está ativo, remove() lança, e isso significa
-        // que o enriquecimento pode já estar rodando e gastando IA — exatamente
-        // o que a janela de desfazer existe para evitar. O humano precisa saber.
+        // Perdeu a corrida entre checar o estado e remover — o worker pegou o
+        // job exatamente nesse intervalo. Recusa em vez de apagar a Offer
+        // embaixo de um enriquecimento que pode já estar rodando.
         const message = err instanceof Error ? err.message : String(err);
-        jobRemovalWarning = `Não foi possível cancelar o job de enriquecimento (pode já estar em andamento): ${message}`;
-        this.logger.warn(jobRemovalWarning);
+        this.logger.warn(
+          `Corrida ao cancelar job de enriquecimento da oferta ${offer.id}: ${message}`,
+        );
+        throw new ConflictException(
+          'Não foi possível cancelar o enriquecimento a tempo; ele pode já estar em andamento. Descarte pela fila de Análise.',
+        );
       }
     }
+    // job ausente: só acontece quando o enfileiramento falhou na própria
+    // promoção (enrichment já registrado como 'failed') — nenhuma IA foi
+    // gasta, então não há nada a cancelar e o desfazer é sempre seguro.
 
-    await this.prisma.client.offer.delete({ where: { id: candidate.offer.id } });
-
-    const updated = await this.prisma.client.candidate.update({
-      where: { id },
-      data: { status: 'pending', discardReason: null, triagedAt: null },
+    // offer.delete + candidate.update precisam ser atômicos pela mesma razão
+    // que em triage(): se o update falhasse depois do delete, o candidato
+    // ficava "promoted" sem Offer — undo() devolveria 409 (sem oferta) e
+    // triage() devolveria 409 (status não é pending), travado sem saída a não
+    // ser restore(), que não é a rota que a UI oferece nesse contexto.
+    return this.prisma.client.$transaction(async (tx) => {
+      await tx.offer.delete({ where: { id: offer.id } });
+      return tx.candidate.update({
+        where: { id },
+        data: { status: 'pending', discardReason: null, triagedAt: null },
+      });
     });
-
-    return jobRemovalWarning ? { ...updated, warning: jobRemovalWarning } : updated;
   }
 
   /** Traz de volta à fila algo que o pré-filtro descartou. */

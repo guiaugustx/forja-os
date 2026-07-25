@@ -1,7 +1,7 @@
 import { BadRequestException, PipeTransform } from '@nestjs/common';
 import type { ZodType } from 'zod';
 
-// Pipe de validação com Zod, usado por corpo/param: @Body(new ZodValidationPipe(schema)).
+// Pipe de validação com Zod, usado por corpo/param/query string: @Body(new ZodValidationPipe(schema)).
 export class ZodValidationPipe<T> implements PipeTransform {
   constructor(private readonly schema: ZodType<T>) {}
 

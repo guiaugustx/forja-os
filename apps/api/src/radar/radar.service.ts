@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@forja/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueueService } from '../queue/queue.service';
 import type { HarvestInput, OfferStageInput } from './radar.dto';
+import { enrichJobId } from './enrich-job';
 
 @Injectable()
 export class RadarService {
@@ -44,7 +45,25 @@ export class RadarService {
       where: { id },
       data: { enrichment: 'pending', enrichmentError: null },
     });
-    await this.queue.enrich.add('retry', { offerId: id });
+
+    // Mesmo jobId determinístico da triagem (helper compartilhado) — assim o
+    // "tentar de novo" também fica localizável e cancelável pelo desfazer, e
+    // clicar duas vezes seguidas não cria dois jobs concorrentes pra mesma
+    // oferta. O BullMQ recusa add() com um id que já existe no Redis mesmo
+    // concluído, então remove o job anterior antes de enfileirar o novo.
+    const jobId = enrichJobId(id);
+    const existing = await this.queue.enrich.getJob(jobId);
+    if (existing) {
+      try {
+        await existing.remove();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new ConflictException(
+          `Não foi possível reiniciar o enriquecimento: o job anterior ainda está em andamento (${message}).`,
+        );
+      }
+    }
+    await this.queue.enrich.add('retry', { offerId: id }, { jobId });
     return { ok: true };
   }
 
