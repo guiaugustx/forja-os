@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@forja/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueueService } from '../queue/queue.service';
@@ -7,6 +7,8 @@ import { enrichJobId } from './enrich-job';
 
 @Injectable()
 export class RadarService {
+  private readonly logger = new Logger(RadarService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly queue: QueueService,
@@ -41,10 +43,6 @@ export class RadarService {
   async retryEnrichment(id: string) {
     const offer = await this.prisma.client.offer.findUnique({ where: { id } });
     if (!offer) throw new NotFoundException('Oferta não encontrada');
-    await this.prisma.client.offer.update({
-      where: { id },
-      data: { enrichment: 'pending', enrichmentError: null },
-    });
 
     // Mesmo jobId determinístico da triagem (helper compartilhado) — assim o
     // "tentar de novo" também fica localizável e cancelável pelo desfazer, e
@@ -57,13 +55,44 @@ export class RadarService {
       try {
         await existing.remove();
       } catch (err) {
+        // Essa remoção falha tanto quando o job anterior está mesmo em
+        // andamento (worker segurando o lock) quanto por qualquer outra causa
+        // (Redis fora do ar, timeout de rede) — não dá pra distinguir os dois
+        // casos daqui, então não afirmamos uma causa específica pro cliente.
+        // A mensagem crua do BullMQ (em inglês, com o nome interno do job) só
+        // vai pro log; é a mesma classe de vazamento já removida do bulk().
         const message = err instanceof Error ? err.message : String(err);
+        this.logger.warn(
+          `Falha ao remover job de enriquecimento ${jobId} antes do retry: ${message}`,
+        );
         throw new ConflictException(
-          `Não foi possível reiniciar o enriquecimento: o job anterior ainda está em andamento (${message}).`,
+          'Não foi possível reiniciar o enriquecimento agora; tente novamente em instantes.',
         );
       }
     }
-    await this.queue.enrich.add('retry', { offerId: id }, { jobId });
+
+    // Só mexe no estado da oferta depois de confirmar que o enfileiramento
+    // deu certo — antes disso, um "pending" prematuro que topasse com Redis
+    // fora do ar deixava a oferta sem mensagem de erro e sem job nenhum, pra
+    // sempre. Trata a falha do add() do mesmo jeito que triage() trata:
+    // oferta cai em 'failed' com a mensagem, pra o card continuar oferecendo
+    // "tentar de novo" em vez de ficar presa em 'pending'.
+    try {
+      await this.queue.enrich.add('retry', { offerId: id }, { jobId });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Falha ao enfileirar retry de enrich da oferta ${id}: ${message}`);
+      await this.prisma.client.offer.update({
+        where: { id },
+        data: { enrichment: 'failed', enrichmentError: message },
+      });
+      return { ok: false };
+    }
+
+    await this.prisma.client.offer.update({
+      where: { id },
+      data: { enrichment: 'pending', enrichmentError: null },
+    });
     return { ok: true };
   }
 

@@ -10,6 +10,16 @@ export class QueueService implements OnModuleDestroy {
   });
 
   readonly harvest = new Queue('harvest', { connection: this.connection });
+  // Atenção: `undo()` (candidates.service.ts) depende de `enrich.getJob()`
+  // ainda encontrar o job depois de concluído/falho para decidir se o
+  // enriquecimento já começou. Isso só funciona porque nem aqui nem no
+  // worker (apps/worker/src/index.ts) há `removeOnComplete`/`removeOnFail`
+  // nas opções desta fila — o BullMQ retém os jobs terminados. Se algum dia
+  // alguém adicionar essa retenção (prática comum pra não encher o Redis),
+  // `getJob` passa a devolver `null` para jobs já processados, e `undo()`
+  // volta a tratar isso como "seguro apagar" mesmo quando a IA já rodou —
+  // sem trava nenhuma. Não adicione `removeOnComplete`/`removeOnFail` aqui
+  // sem revisar `undo()` junto.
   readonly enrich = new Queue('enrich', { connection: this.connection });
 
   async onModuleDestroy() {

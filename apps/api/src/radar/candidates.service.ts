@@ -195,18 +195,41 @@ export class CandidatesService {
     if (decision === 'discard') {
       // Descarte em lote continua sendo (no essencial) uma única escrita —
       // mas para saber quais ids de fato viraram discarded_manual (e quais já
-      // não estavam mais pending) é preciso ler antes de escrever.
-      const eligible = await this.prisma.client.candidate.findMany({
-        where: { id: { in: ids }, status: 'pending' },
-        select: { id: true },
-      });
-      const succeeded = eligible.map((c) => c.id);
-      if (succeeded.length > 0) {
-        await this.prisma.client.candidate.updateMany({
-          where: { id: { in: succeeded } },
+      // não estavam mais pending) é preciso ler antes de escrever. Ler e
+      // escrever numa transação, com o `status: 'pending'` mantido também no
+      // `where` da escrita, é o que garante a guarda: se um PATCH promover um
+      // desses ids entre a leitura e a escrita, a updateMany simplesmente não
+      // toca nessa linha — sem essa guarda, o candidato promovido (já com
+      // Offer criada) seria sobrescrito para discarded_manual, deixando a
+      // Offer órfã e o item sem saída (undo exige 'promoted', triage exige
+      // 'pending'; só restore() resolveria, e não é a rota que a UI oferece
+      // aqui).
+      const succeeded = await this.prisma.client.$transaction(async (tx) => {
+        const eligible = await tx.candidate.findMany({
+          where: { id: { in: ids }, status: 'pending' },
+          select: { id: true },
+        });
+        const eligibleIds = eligible.map((c) => c.id);
+        if (eligibleIds.length === 0) return [];
+
+        const res = await tx.candidate.updateMany({
+          where: { id: { in: eligibleIds }, status: 'pending' },
           data: { status: 'discarded_manual', discardReason: 'manual', triagedAt: new Date() },
         });
-      }
+
+        // Caminho comum: nada mudou de status entre a leitura e a escrita, e
+        // res.count bate com eligibleIds. Só se alguém promoveu um desses ids
+        // nesse meio-tempo (res.count menor) é que vale a pena reconsultar
+        // para saber exatamente quais ids a escrita de fato tocou — a
+        // resposta não pode contar como "sucesso" um id que a guarda barrou.
+        if (res.count === eligibleIds.length) return eligibleIds;
+        const actuallyDiscarded = await tx.candidate.findMany({
+          where: { id: { in: eligibleIds }, status: 'discarded_manual' },
+          select: { id: true },
+        });
+        return actuallyDiscarded.map((c) => c.id);
+      });
+
       const succeededSet = new Set(succeeded);
       const failed = ids
         .filter((id) => !succeededSet.has(id))
