@@ -47,6 +47,9 @@ pnpm --filter @forja/ai build || true
 echo "→ Semeando dados de exemplo…"
 pnpm db:seed
 
+echo "→ Semeando as fontes de colheita do Radar…"
+pnpm db:seed:sources
+
 echo ""
 echo "✅  Pronto! Ambiente configurado."
 echo ""

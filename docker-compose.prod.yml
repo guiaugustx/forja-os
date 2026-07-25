@@ -44,9 +44,6 @@ services:
       SILICONFLOW_MODEL: ${SILICONFLOW_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
       AI_DISABLE_REASONING: ${AI_DISABLE_REASONING:-false}
       URLSCAN_API_KEY: ${URLSCAN_API_KEY}
-      URLSCAN_QUERY: ${URLSCAN_QUERY:-domain:cdn.utmify.com.br}
-      INGEST_LOOKBACK_DAYS: ${INGEST_LOOKBACK_DAYS:-7}
-      INGEST_MAX_OFFERS: ${INGEST_MAX_OFFERS:-20}
       SERPAPI_KEY: ${SERPAPI_KEY:-}
     depends_on:
       postgres:
@@ -69,11 +66,6 @@ services:
       SILICONFLOW_MODEL: ${SILICONFLOW_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
       AI_DISABLE_REASONING: ${AI_DISABLE_REASONING:-false}
       URLSCAN_API_KEY: ${URLSCAN_API_KEY}
-      URLSCAN_QUERY: ${URLSCAN_QUERY:-domain:cdn.utmify.com.br}
-      INGEST_LOOKBACK_DAYS: ${INGEST_LOOKBACK_DAYS:-7}
-      INGEST_MAX_OFFERS: ${INGEST_MAX_OFFERS:-25}
-      INGEST_SCHEDULE_HOURS: ${INGEST_SCHEDULE_HOURS:-6}
-      INGEST_SEEN_COOLDOWN_DAYS: ${INGEST_SEEN_COOLDOWN_DAYS:-21}
       SERPAPI_KEY: ${SERPAPI_KEY:-}
     depends_on:
       postgres:

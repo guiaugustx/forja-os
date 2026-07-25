@@ -13,6 +13,7 @@
     "db:push": "pnpm --filter @forja/db push",
     "db:migrate": "pnpm --filter @forja/db migrate",
     "db:seed": "pnpm --filter @forja/db seed",
+    "db:seed:sources": "pnpm --filter @forja/db seed:sources",
     "db:studio": "pnpm --filter @forja/db studio",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",

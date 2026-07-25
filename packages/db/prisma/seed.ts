@@ -145,7 +145,7 @@ async function main() {
         daysRunning: 142,
         scanCount: 38,
         opportunityScore: 82,
-        saved: true,
+        stage: 'analysis',
         xray: {
           promise: 'Dormir a noite inteira em 7 dias.',
           mechanism: 'Protocolo circadiano em 3 fases.',

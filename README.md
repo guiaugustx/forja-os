@@ -6,7 +6,7 @@ Este repositório é o scaffold funcional. Ele já sobe (web + api + worker + ba
 
 ## Stack
 
-- **Web:** Next.js 14 (App Router) + HeroUI + Tailwind + TanStack Query + Zustand
+- **Web:** Next.js 15 (App Router) + HeroUI v3 + React 19 + Tailwind 4 + TanStack Query + Zustand
 - **API:** NestJS + Prisma + PostgreSQL (validação com Zod)
 - **Worker:** BullMQ + Redis (jobs de integração, tudo fora do request)
 - **IA:** SiliconFlow (Qwen, API compatível com OpenAI) via `@forja/ai`
@@ -17,12 +17,28 @@ Este repositório é o scaffold funcional. Ele já sobe (web + api + worker + ba
 
 Descoberta → curadoria → modelagem:
 
-1. **Ingestão** (Radar): o worker busca páginas de venda no urlscan.io (query padrão
-   `domain:cdn.utmify.com.br`), extrai o texto, e a IA gera um **raio-x** da oferta +
-   um **score** de oportunidade.
-2. **Curadoria** (Radar): você revisa as ofertas (raio-x, sinais, score) e **salva/descarta**.
-3. **Modelagem** (Gerador): a partir de uma oferta salva, a IA monta a **estrutura base**
-   em 4 etapas — Avatar → Grande ideia → Estrutura da oferta → Copy de vendas.
+### Radar
+
+Descoberta em três estágios de custo. A **colheita** (botão "Colher") varre as fontes
+configuradas no urlscan, agrega os hits por chave e aplica um pré-filtro barato — sem
+baixar nenhuma página e sem chamar a IA. Você **tria em massa** na tabela densa, mandando
+cada candidato para a esteira, para análise ou para o descarte. Só então o
+**enriquecimento** gasta download e IA, nas ofertas que você promoveu.
+
+A ingestão não roda sozinha: é sempre disparada por ação humana.
+
+1. **Colheita** (`harvest`): varre as fontes do urlscan (cadastradas em `HarvestSource`,
+   com cursor próprio por fonte) e grava cada hit inédito como `Candidate` — zero
+   download, zero IA.
+2. **Triagem** (aba Triagem em `/radar`): você decide em massa, por linha ou por lote —
+   esteira (✓), análise (?) ou descarte (✕), com desfazer.
+3. **Enriquecimento** (`enrich`): só nos candidatos promovidos para análise — baixa a
+   página, roda o raio-x da IA, mede tráfego/trend e calcula o score.
+4. **Análise** (aba Análise em `/radar`): dossiê pronto — promove para a esteira ou
+   descarta.
+5. **Modelagem** (`/esteira`): a partir de uma oferta promovida, a IA monta a
+   **estrutura base** em 4 etapas — Avatar → Grande ideia → Estrutura da oferta → Copy
+   de vendas.
 
 ### Chaves necessárias (preencher no `.env`)
 
@@ -56,7 +72,9 @@ Pré-requisitos: **Node 20+**, **Docker Desktop** e **pnpm** (o script instala o
 bash scripts/setup.sh
 ```
 
-Isso instala dependências, sobe Postgres + Redis, cria o schema e semeia dados de exemplo.
+Isso instala dependências, sobe Postgres + Redis, cria o schema, semeia dados de exemplo
+e semeia as fontes de colheita do Radar (`HarvestSource`) — sem elas o botão "Colher"
+não tem o que varrer.
 
 ## Rodar
 
@@ -75,9 +93,10 @@ forja-os/
   apps/
     web/      Next.js + HeroUI (o painel)
     api/      NestJS + Prisma (REST /api)
-    worker/   BullMQ (sync de saldos, métricas, mineração)
+    worker/   BullMQ (colheita, enriquecimento, sync de saldos e métricas)
   packages/
     db/       schema Prisma + client + seed
+    ai/       cliente de IA (SiliconFlow/Qwen, compatível com OpenAI)
     types/    tipos compartilhados
   reference/  protótipo HTML + documento de arquitetura (a fonte da verdade visual)
   plano.md    execução em fases até 100%
