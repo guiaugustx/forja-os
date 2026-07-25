@@ -448,7 +448,7 @@ Hoje `searchOffers` deduplica por domínio e **joga fora** os hits repetidos —
 - Produces:
   - `interface RawHit { uuid: string; pageUrl: string; pageDomain: string; title: string | null; time: string | null; referer: string | null }`
   - `interface AggregatedCandidate { dedupeKey: string; url: string; domain: string; title: string | null; screenshotUrl: string | null; referer: string | null; hitCount: number; firstSeenAt: string | null; lastSeenAt: string | null; daysRunning: number }`
-  - `aggregateHits(hits: RawHit[], kind: HarvestKind, now?: Date): AggregatedCandidate[]`
+  - `aggregateHits(hits: RawHit[], kind: HarvestKind): AggregatedCandidate[]` — sem parâmetro de data: `daysRunning` é a distância entre o primeiro e o último hit, não depende de "agora"
 
 - [ ] **Step 1: Escrever o teste que falha**
 
