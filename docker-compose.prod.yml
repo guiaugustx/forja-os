@@ -39,10 +39,17 @@ services:
       REDIS_URL: redis://redis:6379
       API_PORT: '3333'
       WEB_ORIGIN: ${WEB_ORIGIN}
-      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
-      SILICONFLOW_BASE_URL: ${SILICONFLOW_BASE_URL:-https://openrouter.ai/api/v1}
-      SILICONFLOW_MODEL: ${SILICONFLOW_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
+      AI_PROVIDER: ${AI_PROVIDER:-openrouter}
+      AI_FALLBACK_PROVIDER: ${AI_FALLBACK_PROVIDER:-}
+      AI_OPENAI_API_KEY: ${AI_OPENAI_API_KEY:-}
+      # Nome antigo, ainda lido pelo cliente para nao quebrar .env existente.
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
+      AI_OPENAI_BASE_URL: ${AI_OPENAI_BASE_URL:-https://openrouter.ai/api/v1}
+      AI_OPENAI_MODEL: ${AI_OPENAI_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
       AI_DISABLE_REASONING: ${AI_DISABLE_REASONING:-false}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-5}
+      ANTHROPIC_EFFORT: ${ANTHROPIC_EFFORT:-}
       URLSCAN_API_KEY: ${URLSCAN_API_KEY}
       SERPAPI_KEY: ${SERPAPI_KEY:-}
     depends_on:
@@ -61,10 +68,17 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://forja:${POSTGRES_PASSWORD:-forja}@postgres:5432/forja?schema=public
       REDIS_URL: redis://redis:6379
-      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
-      SILICONFLOW_BASE_URL: ${SILICONFLOW_BASE_URL:-https://openrouter.ai/api/v1}
-      SILICONFLOW_MODEL: ${SILICONFLOW_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
+      AI_PROVIDER: ${AI_PROVIDER:-openrouter}
+      AI_FALLBACK_PROVIDER: ${AI_FALLBACK_PROVIDER:-}
+      AI_OPENAI_API_KEY: ${AI_OPENAI_API_KEY:-}
+      # Nome antigo, ainda lido pelo cliente para nao quebrar .env existente.
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
+      AI_OPENAI_BASE_URL: ${AI_OPENAI_BASE_URL:-https://openrouter.ai/api/v1}
+      AI_OPENAI_MODEL: ${AI_OPENAI_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
       AI_DISABLE_REASONING: ${AI_DISABLE_REASONING:-false}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-5}
+      ANTHROPIC_EFFORT: ${ANTHROPIC_EFFORT:-}
       URLSCAN_API_KEY: ${URLSCAN_API_KEY}
       SERPAPI_KEY: ${SERPAPI_KEY:-}
     depends_on:

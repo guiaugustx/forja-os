@@ -1,21 +1,42 @@
-import OpenAI from 'openai';
 import type { ZodType } from 'zod';
+import {
+  activeProvider,
+  anthropicConfig,
+  fallbackProvider,
+  hasKey,
+  openAiCompatibleConfig,
+  type AiProvider,
+} from './config';
+import { chatAnthropic } from './providers/anthropic';
+import { chatOpenAiCompatible } from './providers/openaiCompatible';
+import { isQuotaError, type ChatRequest } from './providers/types';
 
-// Cliente único do SiliconFlow (API compatível com OpenAI). Reutilizado pela API
-// (gerador) e pelo worker (raio-x na ingestão). Tudo configurável por env.
-const apiKey = process.env.SILICONFLOW_API_KEY ?? '';
-const baseURL = process.env.SILICONFLOW_BASE_URL ?? 'https://api.siliconflow.com/v1';
+// Ponto único por onde toda a IA do projeto passa. Quem chama (raio-x da
+// ingestão, etapas do gerador) não sabe qual provedor está atendendo — trocar
+// entre Claude e OpenRouter é configuração, não código.
 
-export const MODEL = process.env.SILICONFLOW_MODEL ?? 'Qwen/Qwen2.5-72B-Instruct';
+export { activeProvider, fallbackProvider } from './config';
+export type { AiProvider } from './config';
 
-// Modelos de "reasoning" (OpenRouter) gastam tokens pensando e truncam/vazam o JSON.
-// Com AI_DISABLE_REASONING=true, mandamos reasoning:{enabled:false} para saída direta.
-const disableReasoning = (process.env.AI_DISABLE_REASONING ?? '').toLowerCase() === 'true';
+/** Modelo do provedor ativo. Exposto para log e telas de diagnóstico. */
+export function activeModel(): string {
+  return activeProvider() === 'anthropic'
+    ? anthropicConfig().model
+    : openAiCompatibleConfig().model;
+}
 
-// Sem chave → modo simulado (devolve mocks coerentes) para o fluxo rodar em dev.
-export const isSimulated = apiKey.length === 0;
+/**
+ * Sem chave nenhuma → modo simulado: devolve os mocks para o fluxo rodar em
+ * dev. É deliberadamente silencioso, então cuidado: uma chave vazia produz um
+ * dossiê preenchido e falso, em vez de um erro visível.
+ */
+export function isSimulated(): boolean {
+  return !hasKey(activeProvider());
+}
 
-const client = apiKey ? new OpenAI({ apiKey, baseURL }) : null;
+function chatWith(provider: AiProvider, req: ChatRequest): Promise<string> {
+  return provider === 'anthropic' ? chatAnthropic(req) : chatOpenAiCompatible(req);
+}
 
 // Alguns modelos embrulham o JSON em cercas ```json``` ou texto. Extrai o objeto.
 function extractJson(text: string): string {
@@ -31,36 +52,39 @@ export interface ChatJsonOptions<T> {
   system: string;
   user: string;
   schema: ZodType<T>;
-  /** Retorno determinístico usado quando não há SILICONFLOW_API_KEY. */
+  /** Retorno determinístico usado quando não há chave de provedor nenhuma. */
   mock: T;
   model?: string;
   maxTokens?: number;
-  temperature?: number;
 }
 
 export async function chatJSON<T>(opts: ChatJsonOptions<T>): Promise<T> {
-  if (!client) {
-    return opts.schema.parse(opts.mock);
+  if (isSimulated()) return opts.schema.parse(opts.mock);
+
+  const req: ChatRequest = {
+    system: opts.system,
+    user: opts.user,
+    model: opts.model,
+    maxTokens: opts.maxTokens,
+  };
+
+  const primary = activeProvider();
+  let text: string;
+
+  try {
+    text = await chatWith(primary, req);
+  } catch (err) {
+    const reserve = fallbackProvider();
+    // Só cota e rate limit justificam a reserva. Chave errada, rede fora ou
+    // modelo inexistente falhariam igual no outro provedor — cair neles só
+    // dobraria o tempo até o operador ver o erro de verdade.
+    if (!reserve || !isQuotaError(err)) throw err;
+    console.warn(
+      `[ai] ${primary} recusou por cota (${(err as Error).message}); tentando ${reserve}.`,
+    );
+    text = await chatWith(reserve, req);
   }
 
-  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-    { role: 'system', content: opts.system },
-    { role: 'user', content: opts.user },
-  ];
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const createParams: any = {
-    model: opts.model ?? MODEL,
-    messages,
-    response_format: { type: 'json_object' },
-    temperature: opts.temperature ?? 0.7,
-    max_tokens: opts.maxTokens ?? 2000,
-  };
-  if (disableReasoning) createParams.reasoning = { enabled: false };
-
-  const res = await client.chat.completions.create(createParams);
-
-  const text = res.choices[0]?.message?.content ?? '{}';
   let parsed: unknown;
   try {
     parsed = JSON.parse(extractJson(text));

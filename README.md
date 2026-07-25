@@ -42,8 +42,19 @@ A ingestão não roda sozinha: é sempre disparada por ação humana.
 
 ### Chaves necessárias (preencher no `.env`)
 
-- `SILICONFLOW_API_KEY` — obrigatório para a geração real de IA (sem ela, roda em modo
-  simulado com mocks). Modelo padrão `Qwen/Qwen2.5-72B-Instruct`.
+- **IA** — dois provedores intercambiáveis, escolhidos por `AI_PROVIDER`:
+  - `openrouter` (ou qualquer API compatível com OpenAI): `AI_OPENAI_API_KEY`,
+    `AI_OPENAI_BASE_URL`, `AI_OPENAI_MODEL`.
+  - `anthropic` (Claude API): `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` (padrão `claude-opus-5`).
+
+  `AI_FALLBACK_PROVIDER` é opcional e só entra em ação quando o primário recusa por
+  **cota ou rate limit** — o caso típico é o teto diário do plano gratuito do OpenRouter.
+  Chave errada, rede fora ou JSON inválido continuam falhando de forma visível, porque
+  trocar de provedor não conserta nenhum deles.
+
+  **Sem chave de provedor nenhuma a IA roda em modo simulado e devolve mocks coerentes.**
+  O fluxo funciona e o dossiê é ficção — prefira uma chave errada dando erro visível a
+  uma chave vazia mentindo.
 - `URLSCAN_API_KEY` — conta gratuita em https://urlscan.io (Settings & API). Sem ela, a
   busca roda na cota anônima (bem limitada).
 - `SERPAPI_KEY` — opcional; liga a demanda via Google Trends. Sem ela, o score usa

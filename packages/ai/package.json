@@ -9,6 +9,7 @@
     "dev": "tsc --watch --preserveWatchOutput"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "openai": "^4.104.0",
     "zod": "^3.23.8"
   },
