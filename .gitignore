@@ -11,3 +11,4 @@ out
 coverage
 .vscode
 prisma/*.db
+.superpowers/

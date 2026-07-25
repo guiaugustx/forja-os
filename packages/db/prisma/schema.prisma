@@ -83,6 +83,19 @@ model Offer {
 }
 
 // Registro de cada rodada de ingestão (feedback do botão "Rodar ingestão").
+// Ledger de domínios já processados na ingestão — para não re-analisar os mesmos
+// e avançar para links novos a cada rodada (re-checa após o cooldown).
+model SeenDomain {
+  domain    String   @id
+  pageUrl   String
+  outcome   String // saved | discarded
+  reason    String?
+  seenAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([seenAt])
+}
+
 model IngestionRun {
   id             String    @id @default(cuid())
   query          String

@@ -16,9 +16,17 @@ export function isBlockedCategory(...fields: Array<string | null | undefined>): 
   return BLOCK_KEYWORDS.some((k) => hay.includes(k));
 }
 
-// Página de vendas? (heurística sobre os sinais extraídos da página)
-export function looksLikeSalesPage(p: { hasCheckout: boolean; hasPrice: boolean; textLen: number }): boolean {
-  return p.hasCheckout || (p.hasPrice && p.textLen > 600);
+// Pré-filtro LENIENTE: só barra pré-IA página realmente vazia e sem nenhum sinal.
+// Se tem checkout, preço, pixel de rastreio OU conteúdo relevante, deixa a IA julgar
+// (ela é o juiz preciso de isSalesPage/productType). Evita falso-negativo de página
+// real cujo CTA/preço está em imagem/JS.
+export function looksLikeSalesPage(p: {
+  hasCheckout: boolean;
+  hasPrice: boolean;
+  textLen: number;
+  pixels: number;
+}): boolean {
+  return p.hasCheckout || p.hasPrice || p.pixels > 0 || p.textLen >= 200;
 }
 
 // Sinal de tráfego: pixels de anúncio (fb/tiktok/google) + circulação no urlscan.

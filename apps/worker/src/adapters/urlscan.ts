@@ -1,5 +1,6 @@
 // Adapter do urlscan.io — descoberta de páginas de venda a partir da Search API.
 // Docs: https://urlscan.io/docs/api/  ·  Auth: header API-Key.
+import * as cheerio from 'cheerio';
 
 const SEARCH_URL = 'https://urlscan.io/api/v1/search/';
 
@@ -31,18 +32,17 @@ function apiKey(): string {
  * até juntar `max` domínios únicos — os produtos digitais são minoria, então é
  * preciso vasculhar mais fundo do que uma página de 100 resultados.
  */
-export async function searchOffers(opts: {
-  query: string;
-  lookbackDays: number;
-  max: number;
-}): Promise<UrlscanHit[]> {
+export async function searchOffers(
+  opts: { query: string; lookbackDays: number; max: number },
+  skipDomains: Set<string> = new Set(),
+): Promise<UrlscanHit[]> {
   const key = apiKey();
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (key) headers['API-Key'] = key;
 
   const q = `${opts.query} AND date:>now-${opts.lookbackDays}d`;
   const pageSize = 100;
-  const maxPages = 12; // trava de segurança (~1200 resultados brutos)
+  const maxPages = 20; // trava de segurança (~2000 resultados brutos)
 
   const seenDomain = new Set<string>();
   const hits: UrlscanHit[] = [];
@@ -66,6 +66,11 @@ export async function searchOffers(opts: {
       const pageUrl = r.page?.url ?? r.task?.url;
       const domain = r.page?.domain ?? '';
       if (!pageUrl || !domain || seenDomain.has(domain)) continue;
+      // Exclui o próprio CDN do Utmify e domínios já processados (memória).
+      if (domain.includes('utmify') || skipDomains.has(domain)) {
+        seenDomain.add(domain);
+        continue;
+      }
       seenDomain.add(domain);
       hits.push({
         uuid: r._id ?? '',
@@ -116,4 +121,25 @@ export async function getDomainActivity(domain: string): Promise<DomainActivity>
     firstSeen: times[0] ?? null,
     lastSeen: times[times.length - 1] ?? null,
   };
+}
+
+/**
+ * Texto do DOM RENDERIZADO pelo urlscan (o scanner já executou o JS da página).
+ * Usado quando o fetch cru vem vazio/fino — corrige páginas SPA/JS.
+ */
+export async function getDomText(uuid: string): Promise<string> {
+  if (!uuid) return '';
+  const key = apiKey();
+  const headers: Record<string, string> = {};
+  if (key) headers['API-Key'] = key;
+  try {
+    const res = await fetch(`https://urlscan.io/dom/${uuid}/`, { headers });
+    if (!res.ok) return '';
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    $('script, style, noscript, svg, iframe, nav, footer, header').remove();
+    return $('body').text().replace(/\s+/g, ' ').trim().slice(0, 12000);
+  } catch {
+    return '';
+  }
 }

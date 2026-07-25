@@ -1,7 +1,7 @@
 import { Job } from 'bullmq';
 import { prisma, Prisma } from '@forja/db';
 import { extractXray } from '@forja/ai';
-import { searchOffers, getDomainActivity, type UrlscanHit } from '../adapters/urlscan';
+import { searchOffers, getDomainActivity, getDomText, type UrlscanHit } from '../adapters/urlscan';
 import { fetchAndExtract } from '../adapters/salesPage';
 import { fetchTrend } from '../adapters/trends';
 import { computeScore } from '../lib/score';
@@ -60,7 +60,13 @@ export async function ingestOffers(job: Job<IngestJobData>) {
   try {
     await progress('🔎 Buscando páginas no urlscan…');
 
-    const hits = await searchOffers({ query, lookbackDays, max });
+    // Memória: pula domínios já processados recentemente (avança para links novos).
+    const cooldownDays = Number(process.env.INGEST_SEEN_COOLDOWN_DAYS ?? 21);
+    const cutoff = new Date(Date.now() - cooldownDays * 86400000);
+    const seenRows = await prisma.seenDomain.findMany({ where: { seenAt: { gt: cutoff } }, select: { domain: true } });
+    const skipDomains = new Set(seenRows.map((r) => r.domain));
+
+    const hits = await searchOffers({ query, lookbackDays, max }, skipDomains);
     found = hits.length;
     await progress(found ? `${found} páginas encontradas. Analisando…` : 'Nenhuma página encontrada.');
 
@@ -82,6 +88,13 @@ export async function ingestOffers(job: Job<IngestJobData>) {
         console.log(`[ingest] descartada (${outcome.reason}): ${hit.pageUrl}`);
       }
       if (events.length > 24) events.length = 24;
+
+      // Registra na memória para os próximos runs pularem este domínio.
+      await prisma.seenDomain.upsert({
+        where: { domain: hit.domain },
+        update: { pageUrl: hit.pageUrl, outcome: outcome.ok ? 'saved' : 'discarded', reason: outcome.reason ?? null },
+        create: { domain: hit.domain, pageUrl: hit.pageUrl, outcome: outcome.ok ? 'saved' : 'discarded', reason: outcome.reason ?? null },
+      });
     }
 
     await prisma.ingestionRun.update({
@@ -120,15 +133,23 @@ export async function ingestOffers(job: Job<IngestJobData>) {
 // vendas → digital → tráfego) e, se passar, grava/atualiza a Offer.
 async function processCandidate(hit: UrlscanHit): Promise<{ ok: boolean; reason?: string }> {
   const page = await fetchAndExtract(hit.pageUrl);
-  if (!page.ok) return { ok: false, reason: 'sem-conteudo' };
+
+  // Conteúdo: se o fetch cru vier fino (SPA/JS ou bloqueio de bot), usa o DOM já
+  // renderizado pelo urlscan durante o scan.
+  let text = page.text;
+  if (text.length < 400 && hit.uuid) {
+    const domText = await getDomText(hit.uuid);
+    if (domText.length > text.length) text = domText;
+  }
+  if (text.length < 40) return { ok: false, reason: 'sem-conteudo' };
 
   if (isBlockedCategory(hit.domain, page.title)) return { ok: false, reason: 'delivery-comida' };
 
-  if (!looksLikeSalesPage({ hasCheckout: page.hasCheckout, hasPrice: page.hasPrice, textLen: page.text.length })) {
+  if (!looksLikeSalesPage({ hasCheckout: page.hasCheckout, hasPrice: page.hasPrice, textLen: text.length, pixels: page.pixels.length })) {
     return { ok: false, reason: 'nao-e-pagina-de-vendas' };
   }
 
-  const xray = await extractXray({ pageText: page.text, url: hit.pageUrl, title: hit.title });
+  const xray = await extractXray({ pageText: text, url: hit.pageUrl, title: hit.title });
   if (!xray.isSalesPage) return { ok: false, reason: 'nao-e-pagina-de-vendas' };
   if (xray.productType !== 'digital') return { ok: false, reason: `produto-${xray.productType}` };
   if (isBlockedCategory(xray.category, xray.niche, hit.title)) return { ok: false, reason: 'delivery-comida' };
