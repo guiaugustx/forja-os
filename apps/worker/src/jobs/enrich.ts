@@ -95,7 +95,12 @@ export async function enrich(job: Job<EnrichJobData>) {
     const page = await fetchAndExtract(targetUrl);
     if (!page.ok) alerts.push('sem-conteudo');
 
-    if (page.ok && !looksLikeSalesPage({
+    // Correção 7: com `salesPageMissing`, `page` é o download do próprio
+    // gateway (targetUrl não avançou) — rodar o gate "parece página de
+    // vendas?" sobre um checkout sempre reprova, e o alerta resultante só
+    // duplicaria o que `pagina-de-vendas-nao-localizada` já diz. Mesmo
+    // tratamento que o raio-x logo abaixo.
+    if (page.ok && !salesPageMissing && !looksLikeSalesPage({
       hasCheckout: page.hasCheckout,
       hasPrice: page.hasPrice,
       textLen: page.text.length,
@@ -130,7 +135,6 @@ export async function enrich(job: Job<EnrichJobData>) {
       domainScanCount: activity.scanCount,
       lastSeen: activity.lastSeen,
     });
-    if (!traffic.hasTraffic) alerts.push('sem-trafego');
 
     // Correção 1: `getDomainActivity` devolve exatamente essa forma vazia
     // (scanCount 0, sem firstSeen/lastSeen) tanto quando o domínio realmente não
@@ -143,6 +147,14 @@ export async function enrich(job: Job<EnrichJobData>) {
     const collectionFailed = !page.ok && activityIsEmpty;
     const trafficScore = collectionFailed ? (offer.trafficScore ?? traffic.score) : traffic.score;
     const scanCount = collectionFailed ? (offer.scanCount ?? activity.scanCount) : activity.scanCount;
+
+    // Correção 7: `traffic.hasTraffic` mede a coleta desta rodada — quando ela
+    // falhou (`collectionFailed`), o trafficScore gravado é o antigo, preservado
+    // de propósito por não ter medição nova para confiar. Empilhar
+    // `sem-trafego` aqui mostraria esse alerta ao lado de um score bom antigo,
+    // como se a medição de agora tivesse dito "sem tráfego" quando na verdade
+    // ela não rodou.
+    if (!collectionFailed && !traffic.hasTraffic) alerts.push('sem-trafego');
 
     const niche = xray?.niche || offer.niche || 'desconhecido';
     const market = xray?.market || offer.market || 'BR';

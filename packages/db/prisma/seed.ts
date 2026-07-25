@@ -129,6 +129,12 @@ async function main() {
   });
 
   // ---- Radar: ofertas mineradas (formato pós-ingestão urlscan) ----
+  // Nascem com stage/enrichment explícitos e em `done`: no fluxo real toda
+  // Offer sai de um Candidate promovido e entra na fila do job enrich, mas
+  // estas são só exemplo — sem Candidate por trás não há job para tirá-las de
+  // `pending`, e a tela de Análise trata pending/running como "ocupado"
+  // (botão de promover desabilitado, polling de 2,5s aceso pra sempre). Nascer
+  // em `done` é o estado que a tela sabe exibir e operar.
   await prisma.offer.createMany({
     data: [
       {
@@ -146,6 +152,7 @@ async function main() {
         scanCount: 38,
         opportunityScore: 82,
         stage: 'analysis',
+        enrichment: 'done',
         xray: {
           promise: 'Dormir a noite inteira em 7 dias.',
           mechanism: 'Protocolo circadiano em 3 fases.',
@@ -172,6 +179,8 @@ async function main() {
         daysRunning: 63,
         scanCount: 12,
         opportunityScore: 61,
+        stage: 'analysis',
+        enrichment: 'done',
       },
       {
         source: 'urlscan',
@@ -187,6 +196,8 @@ async function main() {
         daysRunning: 97,
         scanCount: 21,
         opportunityScore: 74,
+        stage: 'analysis',
+        enrichment: 'done',
       },
     ],
   });

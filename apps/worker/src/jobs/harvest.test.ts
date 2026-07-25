@@ -70,7 +70,11 @@ describe('ingestPage — candidato conhecido acumula sinal em vez de congelar', 
     ]);
     const cb = callbacks();
 
-    // Duas páginas da mesma rodada: hits do mesmo domínio se agregam a hitCount 2.
+    // Uma única chamada de ingestPage com dois hits do mesmo domínio: testa a
+    // agregação intra-página (aggregateHits somando para hitCount 2), não a
+    // transição de cursor entre duas páginas de uma rodada — isso é coberto
+    // em harvest.ts pelo laço de `page` em `harvest()`, fora do escopo de
+    // ingestPage.
     await ingestPage(
       [hit({ uuid: 'a' }), hit({ uuid: 'b', pageUrl: 'https://metodoxyz.com.br/lp' })],
       'resource',

@@ -6,6 +6,7 @@
 // (getDomainActivity), que em milhares de domínios estoura o rate limit.
 
 import { buildDedupeKey, type HarvestKind } from './dedupeKey';
+import { extractGatewayFromUrl } from './gateway';
 
 export interface RawHit {
   uuid: string;
@@ -27,6 +28,12 @@ export interface AggregatedCandidate {
   firstSeenAt: string | null;
   lastSeenAt: string | null;
   daysRunning: number;
+  // Só preenchidos para fontes de checkout — numa fonte de recurso a URL
+  // escaneada já é a página de vendas, e esses três campos não fazem sentido
+  // (ver comentário em aggregateHits sobre productName/gateway/priceCents).
+  productName: string | null;
+  priceCents: number | null;
+  gateway: string | null;
 }
 
 const DAY_MS = 86_400_000;
@@ -53,12 +60,21 @@ export function aggregateHits(hits: RawHit[], kind: HarvestKind): AggregatedCand
         firstSeenAt: stamp,
         lastSeenAt: stamp,
         daysRunning: 0,
+        // gateway: do host da própria URL escaneada — sai de graça, sem
+        // requisição nova. productName: o título da página é o melhor proxy
+        // barato que temos do nome do produto numa fonte de checkout.
+        // priceCents: não dá pra saber sem baixar a página (o preço não vem
+        // nos metadados do urlscan) — fica null até o enrich rodar.
+        gateway: kind === 'checkout' ? extractGatewayFromUrl(h.pageUrl) : null,
+        productName: kind === 'checkout' ? h.title : null,
+        priceCents: null,
       });
       continue;
     }
 
     found.hitCount++;
     if (!found.title && h.title) found.title = h.title;
+    if (kind === 'checkout' && !found.productName && h.title) found.productName = h.title;
     if (!found.referer && h.referer) found.referer = h.referer;
     if (stamp) {
       if (!found.firstSeenAt || stamp < found.firstSeenAt) found.firstSeenAt = stamp;

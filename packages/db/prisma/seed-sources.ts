@@ -28,7 +28,13 @@ async function main() {
   for (const s of SOURCES) {
     await prisma.harvestSource.upsert({
       where: { query: s.query },
-      update: { name: s.name, kind: s.kind },
+      // `enabled: true` também no update: uma fonte que caiu da lista (e foi
+      // desabilitada pelo updateMany abaixo numa rodada anterior do seed) e
+      // depois voltou a aparecer aqui precisa reabilitar — sem isto ela
+      // continuava enabled:false para sempre, e a API (que filtra por
+      // enabled:true) some da colheita em silêncio mesmo com a fonte de volta
+      // à lista definitiva.
+      update: { name: s.name, kind: s.kind, enabled: true },
       create: s,
     });
     console.log(`✓ ${s.name}`);

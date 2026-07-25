@@ -78,6 +78,13 @@ model Candidate {
 
   @@index([status, hitCount])
   @@index([sourceId, status])
+  // Ordenações "dias no ar" e "visto recentemente" da fila de triagem (ver
+  // candidates.service.ts) — sem isto varrem a partição inteira de pending.
+  @@index([status, daysRunning])
+  @@index([status, lastSeenAt])
+  // Filtro por motivo de descarte cai quase sempre em discarded_auto, a maior
+  // partição do pool — sem índice composto é sequential scan nela inteira.
+  @@index([status, discardReason])
 }
 
 enum OfferStage {
@@ -164,19 +171,6 @@ model Offer {
   @@index([daysRunning])
   @@index([opportunityScore])
   @@index([stage])
-}
-
-// Ledger de domínios já processados na ingestão — para não re-analisar os mesmos
-// e avançar para links novos a cada rodada (re-checa após o cooldown).
-model SeenDomain {
-  domain    String   @id
-  pageUrl   String
-  outcome   String // saved | discarded
-  reason    String?
-  seenAt    DateTime @updatedAt
-  createdAt DateTime @default(now())
-
-  @@index([seenAt])
 }
 
 // Registro de cada rodada de colheita (feedback do botão "Colher").

@@ -86,6 +86,50 @@ describe('aggregateHits — fonte de checkout', () => {
     const a = out.find((c) => c.dedupeKey.endsWith('produto-a'))!;
     expect(a.hitCount).toBe(2);
   });
+
+  // Correção 3: candidato de checkout precisa nascer com gateway e produto
+  // preenchidos — sem download nem IA, só o que a varredura já trouxe.
+  it('deriva gateway do host da URL e usa o título como productName', () => {
+    const out = aggregateHits(
+      [hit({ pageDomain: 'pay.cakto.com.br', pageUrl: 'https://pay.cakto.com.br/produto-a', title: 'Produto A' })],
+      'checkout',
+    );
+    expect(out[0].gateway).toBe('cakto');
+    expect(out[0].productName).toBe('Produto A');
+  });
+
+  it('nunca preenche priceCents na colheita — preço exige baixar a página', () => {
+    const out = aggregateHits(
+      [hit({ pageDomain: 'pay.kirvano.com', pageUrl: 'https://pay.kirvano.com/produto-x' })],
+      'checkout',
+    );
+    expect(out[0].priceCents).toBeNull();
+  });
+
+  it('preenche productName com o título de um hit posterior quando o primeiro hit não tinha título', () => {
+    const out = aggregateHits(
+      [
+        hit({ pageDomain: 'pay.cakto.com.br', pageUrl: 'https://pay.cakto.com.br/produto-a', title: null }),
+        hit({
+          uuid: 'b',
+          pageDomain: 'pay.cakto.com.br',
+          pageUrl: 'https://pay.cakto.com.br/produto-a',
+          title: 'Produto A',
+        }),
+      ],
+      'checkout',
+    );
+    expect(out[0].productName).toBe('Produto A');
+  });
+});
+
+describe('aggregateHits — fonte de recurso não recebe campos de checkout', () => {
+  it('gateway e productName ficam null numa fonte de recurso', () => {
+    const out = aggregateHits([hit({})], 'resource');
+    expect(out[0].gateway).toBeNull();
+    expect(out[0].productName).toBeNull();
+    expect(out[0].priceCents).toBeNull();
+  });
 });
 
 describe('aggregateHits — bordas', () => {
