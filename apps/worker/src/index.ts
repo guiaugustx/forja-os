@@ -1,25 +1,20 @@
 import { Worker } from 'bullmq';
-import { connection, queues, INGEST_QUEUE } from './queues';
-import { ingestOffers } from './jobs/ingestOffers';
+import { connection, HARVEST_QUEUE, ENRICH_QUEUE } from './queues';
+import { harvest } from './jobs/harvest';
+import { enrich } from './jobs/enrich';
 
 console.log('⚙️  Forja Worker iniciado. Aguardando jobs...');
 
-// Consumidor da ingestão de ofertas (urlscan → raio-x IA → score → Offer).
-new Worker(INGEST_QUEUE, ingestOffers, { connection, concurrency: 1 });
+// Colheita: urlscan → agregação → pré-filtro → Candidate. Barata e em massa.
+// Serial de propósito, para não competir por rate limit do urlscan consigo mesma.
+new Worker(HARVEST_QUEUE, harvest, { connection, concurrency: 1 });
 
-// Agendamento periódico (além do disparo sob demanda pela API).
-async function schedule() {
-  const hours = Number(process.env.INGEST_SCHEDULE_HOURS ?? 6);
-  if (hours > 0) {
-    await queues.ingestOffers.add(
-      'scheduled',
-      {},
-      { repeat: { every: hours * 60 * 60 * 1000 }, jobId: 'ingest-scheduled' },
-    );
-    console.log(`⏱️  Ingestão agendada a cada ${hours}h.`);
-  }
-}
-schedule().catch((e) => console.error('Falha ao agendar ingestão:', e));
+// Enriquecimento: download + raio-x IA + tráfego + trend + score. Caro e sob
+// demanda, com paralelismo modesto para não estourar o rate limit da IA.
+new Worker(ENRICH_QUEUE, enrich, { connection, concurrency: 3 });
+
+// Sem agendamento periódico: a colheita é disparada exclusivamente por ação
+// humana, no botão do Radar.
 
 process.on('SIGTERM', async () => {
   await connection.quit();
