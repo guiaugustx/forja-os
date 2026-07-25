@@ -37,7 +37,7 @@ export async function extractXray(input: {
     user: buildXrayUser({ ...input, pageText }),
     schema: xraySchema,
     mock: xrayMock,
-    maxTokens: 1200,
+    maxTokens: 1600,
   });
 }
 

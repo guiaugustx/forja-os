@@ -40,8 +40,9 @@ services:
       API_PORT: '3333'
       WEB_ORIGIN: ${WEB_ORIGIN}
       SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
-      SILICONFLOW_BASE_URL: ${SILICONFLOW_BASE_URL:-https://api.siliconflow.com/v1}
-      SILICONFLOW_MODEL: ${SILICONFLOW_MODEL:-Qwen/Qwen2.5-72B-Instruct}
+      SILICONFLOW_BASE_URL: ${SILICONFLOW_BASE_URL:-https://openrouter.ai/api/v1}
+      SILICONFLOW_MODEL: ${SILICONFLOW_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
+      AI_DISABLE_REASONING: ${AI_DISABLE_REASONING:-false}
       URLSCAN_API_KEY: ${URLSCAN_API_KEY}
       URLSCAN_QUERY: ${URLSCAN_QUERY:-domain:cdn.utmify.com.br}
       INGEST_LOOKBACK_DAYS: ${INGEST_LOOKBACK_DAYS:-7}
@@ -64,8 +65,9 @@ services:
       DATABASE_URL: postgresql://forja:${POSTGRES_PASSWORD:-forja}@postgres:5432/forja?schema=public
       REDIS_URL: redis://redis:6379
       SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
-      SILICONFLOW_BASE_URL: ${SILICONFLOW_BASE_URL:-https://api.siliconflow.com/v1}
-      SILICONFLOW_MODEL: ${SILICONFLOW_MODEL:-Qwen/Qwen2.5-72B-Instruct}
+      SILICONFLOW_BASE_URL: ${SILICONFLOW_BASE_URL:-https://openrouter.ai/api/v1}
+      SILICONFLOW_MODEL: ${SILICONFLOW_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
+      AI_DISABLE_REASONING: ${AI_DISABLE_REASONING:-false}
       URLSCAN_API_KEY: ${URLSCAN_API_KEY}
       URLSCAN_QUERY: ${URLSCAN_QUERY:-domain:cdn.utmify.com.br}
       INGEST_LOOKBACK_DAYS: ${INGEST_LOOKBACK_DAYS:-7}

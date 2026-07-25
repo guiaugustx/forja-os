@@ -48,13 +48,17 @@ export async function chatJSON<T>(opts: ChatJsonOptions<T>): Promise<T> {
     { role: 'user', content: opts.user },
   ];
 
-  const res = await client.chat.completions.create({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const createParams: any = {
     model: opts.model ?? MODEL,
     messages,
     response_format: { type: 'json_object' },
     temperature: opts.temperature ?? 0.7,
     max_tokens: opts.maxTokens ?? 2000,
-  });
+  };
+  if (disableReasoning) createParams.reasoning = { enabled: false };
+
+  const res = await client.chat.completions.create(createParams);
 
   const text = res.choices[0]?.message?.content ?? '{}';
   let parsed: unknown;
