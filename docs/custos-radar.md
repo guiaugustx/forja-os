@@ -170,3 +170,43 @@ com folga e sem custo recorrente.
 - Preços do OpenRouter: `GET https://openrouter.ai/api/v1/models` (público).
 - Preços da Anthropic: tabela oficial de modelos (Opus 5 = $5/M entrada,
   $25/M saída).
+
+---
+
+## Qual modelo usar (medido em 5 páginas reais, 2026-07-25)
+
+| Modelo | Custo/oferta | vs Opus 5 | Mês a 10% de promoção |
+|---|---:|---:|---:|
+| Claude Opus 5 | US$ 0,0341 | — | ~US$ 23 |
+| **Claude Sonnet 5** | **US$ 0,0119** | **2,9× menor** | **~US$ 8** |
+| Claude Haiku 4.5 | US$ 0,0047 | 7,3× menor | ~US$ 3 |
+
+O preço do Sonnet 5 é o introdutório ($2/$10 por M, até 31/08/2026). Na tabela
+cheia ($3/$15) sobe para ~US$ 0,018/oferta, ainda metade do Opus.
+
+**Concordância com o Opus 5**, em 5 campos × 5 páginas:
+
+- `isSalesPage`, `productType`, `market`: **idênticos nos três modelos, 15/15.**
+  São os campos que disparam os alertas e o filtro de mercado — o Opus não
+  entrega nada aqui que o Haiku não entregue.
+- `niche`: diverge sempre, por granularidade (texto livre). Nenhum errado.
+- `ticketEstCents`: a divergência real. Páginas de suplemento com 3 faixas de
+  preço fazem cada modelo escolher uma faixa diferente (Opus 17700 vs Sonnet
+  6900 na mesma página). Ambiguidade da página, não erro de leitura.
+
+**Haiku 4.5 quebra o schema hoje:** devolveu `ticketEstCents` como *string*
+(`"6700"`) em 5 de 5 páginas. O schema é `z.number()`, então `schema.parse()`
+lançaria e todo enriquecimento falharia. Exigiria `z.coerce.number()` — e ainda
+assim é o modelo cuja estimativa de ticket mais diverge, alimentando o score.
+
+**Decisão: `ANTHROPIC_MODEL="claude-sonnet-5"`.** O Opus 5 é o modelo mais caro
+que existe fazendo extração estruturada de página de vendas.
+
+### Efeito colateral conhecido do campo `niche`
+
+Nenhum modelo produz nichos agrupáveis: `"saude"`, `"Saúde articular e inchaço
+nos membros inferiores"` e `"Saúde - circulação/retenção de líquidos"` são a
+mesma coisa para um humano e três valores distintos no banco. Como
+`competitionCount` conta ofertas do mesmo `niche` + `market`, o resultado é
+quase sempre 1 — e o score sai inflado pelo componente de concorrência. Vale um
+vocabulário fechado de nichos no prompt.
