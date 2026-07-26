@@ -114,6 +114,11 @@ export default function RadarPage() {
   // selecionada (não faz sentido editar limiares de "todas as fontes" de uma
   // vez).
   const selectedSource = sourceId !== 'all' ? sources.data?.find((s) => s.id === sourceId) : undefined;
+
+  // Colheita pausada = nenhuma fonte habilitada. É o mecanismo deliberado de
+  // pausa: nada é apagado, e religar é reabilitar uma fonte no controle abaixo.
+  // Só vale quando as fontes carregaram — erro de rede não pode virar "pausado".
+  const harvestPaused = !!sources.data && sources.data.every((s) => !s.enabled);
   const [sourceDraft, setSourceDraft] = useState<{ minHitCount: string; maxAgeDays: string } | null>(
     null,
   );
@@ -429,8 +434,12 @@ export default function RadarPage() {
               <span className="text-[11px] text-red-400">Não consegui carregar as fontes.</span>
             )}
           </div>
-          <Button variant="primary" isDisabled={running} onPress={() => harvest.mutate()}>
-            {running ? 'Colhendo…' : '✦ Colher'}
+          <Button
+            variant="primary"
+            isDisabled={running || harvestPaused}
+            onPress={() => harvest.mutate()}
+          >
+            {running ? 'Colhendo…' : harvestPaused ? '⏸ Colheita pausada' : '✦ Colher'}
           </Button>
         </div>
       </div>
@@ -488,6 +497,17 @@ export default function RadarPage() {
           >
             Salvar
           </Button>
+        </Panel>
+      )}
+
+      {harvestPaused && (
+        <Panel className="border-amber-500/30 bg-amber-500/10 px-4 py-3 text-[13px]">
+          <b className="text-amber-300">⏸ Colheita pausada.</b>{' '}
+          <span className="text-neutral-300">
+            As {sources.data?.length ?? 0} fontes estão desabilitadas, então nenhuma rodada nova
+            entra. A fila de triagem continua inteira — trabalhe o backlog à vontade. Para religar,
+            escolha uma fonte no seletor acima e marque &quot;habilitada&quot;.
+          </span>
         </Panel>
       )}
 

@@ -127,7 +127,16 @@ export class RadarService {
       ? await this.prisma.client.harvestSource.findMany({ where: { id: input.sourceId } })
       : await this.prisma.client.harvestSource.findMany({ where: { enabled: true } });
 
-    if (sources.length === 0) throw new NotFoundException('Nenhuma fonte habilitada');
+    // Nenhuma fonte habilitada é o mecanismo de PAUSA da colheita: desabilitar
+    // todas trava o botão sem apagar nada, e reabilitar (PATCH /radar/sources/:id)
+    // religa. Não é "não encontrado" — é um estado deliberado, então 409.
+    if (sources.length === 0) {
+      throw new ConflictException(
+        input.sourceId
+          ? 'Essa fonte não existe ou está desabilitada.'
+          : 'A colheita está pausada: nenhuma fonte habilitada. Reative ao menos uma fonte para colher.',
+      );
+    }
 
     // Cria todas as rodadas antes de enfileirar qualquer job: se a criação da
     // segunda IngestionRun falhasse no meio do laço anterior, a primeira já
