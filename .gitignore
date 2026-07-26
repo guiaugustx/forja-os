@@ -6,7 +6,9 @@ out
 .turbo
 *.log
 .env
-.env.local
+.env.*
+!.env.example
+!.env.prod.example
 .DS_Store
 coverage
 .vscode

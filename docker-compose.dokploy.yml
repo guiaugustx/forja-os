@@ -1,0 +1,109 @@
+# Forja OS — compose para deploy GERENCIADO pelo Dokploy.
+# Diferença do docker-compose.prod.yml: SEM `ports:` de host — o Traefik do Dokploy
+# roteia web/api por domínio (sslip.io + HTTPS). As variáveis de ambiente e os
+# domínios são configurados no painel/API do Dokploy.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: forja
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forja}
+      POSTGRES_DB: forja
+    volumes:
+      - forja_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U forja']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - forja_redisdata:/data
+
+  api:
+    build:
+      context: .
+      target: runtime
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    image: forja-os
+    restart: unless-stopped
+    command: node apps/api/dist/main.js
+    # Traefik roteia via domínio para a porta 3333 (configurado no Dokploy).
+    expose:
+      - '3333'
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://forja:${POSTGRES_PASSWORD:-forja}@postgres:5432/forja?schema=public
+      REDIS_URL: redis://redis:6379
+      API_PORT: '3333'
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      JWT_SECRET: ${JWT_SECRET:-forja-dev-secret-change-me}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      AI_PROVIDER: ${AI_PROVIDER:-openrouter}
+      AI_FALLBACK_PROVIDER: ${AI_FALLBACK_PROVIDER:-}
+      AI_OPENAI_API_KEY: ${AI_OPENAI_API_KEY:-}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
+      AI_OPENAI_BASE_URL: ${AI_OPENAI_BASE_URL:-https://openrouter.ai/api/v1}
+      AI_OPENAI_MODEL: ${AI_OPENAI_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
+      AI_DISABLE_REASONING: ${AI_DISABLE_REASONING:-false}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-5}
+      ANTHROPIC_EFFORT: ${ANTHROPIC_EFFORT:-}
+      URLSCAN_API_KEY: ${URLSCAN_API_KEY}
+      SERPAPI_KEY: ${SERPAPI_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker:
+    image: forja-os
+    restart: unless-stopped
+    command: node apps/worker/dist/index.js
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://forja:${POSTGRES_PASSWORD:-forja}@postgres:5432/forja?schema=public
+      REDIS_URL: redis://redis:6379
+      AI_PROVIDER: ${AI_PROVIDER:-openrouter}
+      AI_FALLBACK_PROVIDER: ${AI_FALLBACK_PROVIDER:-}
+      AI_OPENAI_API_KEY: ${AI_OPENAI_API_KEY:-}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
+      AI_OPENAI_BASE_URL: ${AI_OPENAI_BASE_URL:-https://openrouter.ai/api/v1}
+      AI_OPENAI_MODEL: ${AI_OPENAI_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
+      AI_DISABLE_REASONING: ${AI_DISABLE_REASONING:-false}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-5}
+      ANTHROPIC_EFFORT: ${ANTHROPIC_EFFORT:-}
+      URLSCAN_API_KEY: ${URLSCAN_API_KEY}
+      SERPAPI_KEY: ${SERPAPI_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  web:
+    image: forja-os
+    restart: unless-stopped
+    working_dir: /app/apps/web
+    command: node_modules/.bin/next start -H 0.0.0.0 -p 3000
+    # Traefik roteia via domínio para a porta 3000 (configurado no Dokploy).
+    expose:
+      - '3000'
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    depends_on:
+      - api
+
+volumes:
+  forja_pgdata:
+  forja_redisdata:
