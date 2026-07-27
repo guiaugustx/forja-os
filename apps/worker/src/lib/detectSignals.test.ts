@@ -47,6 +47,53 @@ describe('detectSignals', () => {
   });
 });
 
+describe('detectSignals — loja/marketplace (categoria fora do escopo)', () => {
+  it('CDN de Shopify/Nuvemshop/VTEX em domains → storefronts', () => {
+    const s = detectSignals(
+      ['cdn.shopify.com', 'd2r9epyceweg5n.cloudfront.net', 'checkout.nuvemshop.com.br', 'secure.vteximg.com.br'],
+      [],
+      'sales-page',
+    );
+    expect(s.storefronts.sort()).toEqual(['nuvemshop', 'shopify', 'vtex']);
+  });
+
+  it('marketplace só conta em linkDomains (link, não requisição)', () => {
+    const s = detectSignals(
+      ['cdn.somewhere.com'],
+      ['www.shopee.com.br', 'produto.mercadolivre.com.br'],
+      'sales-page',
+    );
+    expect(s.marketplaces.sort()).toEqual(['mercadolivre', 'shopee']);
+    // marketplace em domains (não link) NÃO conta como marketplace
+    const s2 = detectSignals(['www.shopee.com.br'], [], 'sales-page');
+    expect(s2.marketplaces).toEqual([]);
+  });
+
+  it('wix NÃO é storefront (site-builder genérico — evita falso positivo)', () => {
+    const s = detectSignals(['static.parastorage.com', 'www.wix.com', 'meusite.wixsite.com'], [], 'sales-page');
+    expect(s.storefronts).toEqual([]);
+  });
+
+  it('infoproduto real (cakto + pixel, sem loja) → storefronts/marketplaces vazios', () => {
+    const s = detectSignals(
+      ['connect.facebook.net', 'cdn.utmify.com.br'],
+      ['pay.cakto.com.br'],
+      'sales-page',
+    );
+    expect(s.storefronts).toEqual([]);
+    expect(s.marketplaces).toEqual([]);
+    expect(s.pixels).toEqual(['facebook']);
+  });
+
+  it('subtractSelfSignals preserva storefronts/marketplaces (não são tautológicos)', async () => {
+    const { selfSignalsFromQuery, subtractSelfSignals } = await import('./detectSignals');
+    const detected = detectSignals(['cdn.shopify.com', 'connect.facebook.net'], ['www.shopee.com.br'], 'sales-page');
+    const clean = subtractSelfSignals(detected, selfSignalsFromQuery('domain:cdn.utmify.com.br'));
+    expect(clean.storefronts).toEqual(['shopify']);
+    expect(clean.marketplaces).toEqual(['shopee']);
+  });
+});
+
 describe('selfSignalsFromQuery / subtractSelfSignals — tautologia da fonte', () => {
   it('fonte utmify exclui o tracker utmify; converteai exclui o player', async () => {
     const { selfSignalsFromQuery, subtractSelfSignals } = await import('./detectSignals');

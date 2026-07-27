@@ -257,6 +257,52 @@ describe('ingestPage — ressurreição temporal e signal pass', () => {
     expect(cb.onSignalDiscard).toHaveBeenCalledWith('metodoxyz.com.br', 'malicioso-urlscan');
   });
 
+  it('loja/e-commerce (Shopify) é descartada por categoria, mesmo com pixel', async () => {
+    findMany.mockResolvedValueOnce([]);
+    findMany.mockResolvedValueOnce([
+      {
+        id: 'novo-1', dedupeKey: 'metodoxyz.com.br', scanUuid: 'u1', screenshotUrl: null,
+        hitCount: 5, daysRunning: 3, lastSeenAt: new Date('2026-07-10T00:00:00Z'), domainAgeDays: 20,
+      },
+    ]);
+    // Loja Shopify COM pixel Meta: antes subia no ranking; agora sai por categoria.
+    getScanResult.mockResolvedValue({
+      domains: ['cdn.shopify.com', 'connect.facebook.net'], linkDomains: [], malicious: false,
+      domainAgeDays: 20, tlsAgeDays: 5, httpStatus: 200,
+    });
+    const cb = callbacks();
+
+    await ingestPage([hit({})], 'resource', source, 'run-1', cb, BUDGET());
+
+    expect(cb.onSignalDiscard).toHaveBeenCalledWith('metodoxyz.com.br', 'loja-ecommerce');
+    const data = update.mock.calls.map((c) => c[0].data).find((d) => d.discardReason === 'loja-ecommerce')!;
+    expect(data.status).toBe('discarded_auto');
+    expect(data.signals.storefronts).toContain('shopify');
+  });
+
+  it('página fora do ar no scan (HTTP 404) é descartada como pagina-fora-do-ar', async () => {
+    findMany.mockResolvedValueOnce([]);
+    findMany.mockResolvedValueOnce([
+      {
+        id: 'novo-1', dedupeKey: 'metodoxyz.com.br', scanUuid: 'u1', screenshotUrl: null,
+        hitCount: 4, daysRunning: 2, lastSeenAt: new Date('2026-07-10T00:00:00Z'), domainAgeDays: 8,
+      },
+    ]);
+    // Com pixel, mas o scan pegou a página já fora do ar (404): categoria vence.
+    getScanResult.mockResolvedValue({
+      domains: ['connect.facebook.net'], linkDomains: [], malicious: false,
+      domainAgeDays: 8, tlsAgeDays: 2, httpStatus: 404,
+    });
+    const cb = callbacks();
+
+    await ingestPage([hit({})], 'resource', source, 'run-1', cb, BUDGET());
+
+    expect(cb.onSignalDiscard).toHaveBeenCalledWith('metodoxyz.com.br', 'pagina-fora-do-ar');
+    const data = update.mock.calls.map((c) => c[0].data).find((d) => d.discardReason === 'pagina-fora-do-ar')!;
+    expect(data.status).toBe('discarded_auto');
+    expect(data.signals.httpStatus).toBe(404);
+  });
+
   it('com pixel medido, candidato permanece na fila com score e hasAdPixel', async () => {
     findMany.mockResolvedValueOnce([]);
     findMany.mockResolvedValueOnce([

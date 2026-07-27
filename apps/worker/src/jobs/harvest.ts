@@ -332,6 +332,8 @@ export async function ingestPage(
   }));
   const pass = await runSignalPass(passRows, signalBudget);
   for (const key of pass.discardedMalicious) cb.onSignalDiscard(key, 'malicioso-urlscan');
+  for (const key of pass.discardedStore) cb.onSignalDiscard(key, 'loja-ecommerce');
+  for (const key of pass.discardedDead) cb.onSignalDiscard(key, 'pagina-fora-do-ar');
   for (const key of pass.discardedZeroSignal) cb.onSignalDiscard(key, 'sem-sinal-trafego');
 
   return { signalRateLimited: pass.rateLimited };

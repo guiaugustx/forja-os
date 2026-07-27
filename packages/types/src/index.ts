@@ -51,7 +51,10 @@ export interface CandidateSignals {
   trackers: string[]; // utmify
   players: string[]; // converteai | pandavideo | vturb
   linkedCheckouts: string[];
+  storefronts?: string[]; // shopify | nuvemshop | vtex … (loja → descarte de categoria)
+  marketplaces?: string[]; // shopee | mercadolivre | amazon … (linkados)
   origin: 'sales-page' | 'checkout';
+  httpStatus?: number | null; // status HTTP da página no scan (>=400 → fora do ar)
   tags?: ('escalando-agora' | 'comprovada' | 'multi-canal')[];
   measuredAt?: string;
   error?: string; // ex.: 'result-404' (scan expirado)

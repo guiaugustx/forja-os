@@ -115,5 +115,18 @@ describe('parseScanResult', () => {
     expect(r.linkDomains).toEqual([]);
     expect(r.malicious).toBe(false);
     expect(r.domainAgeDays).toBeNull();
+    expect(r.httpStatus).toBeNull();
+  });
+
+  it('httpStatus lido de page.status (string no JSON do urlscan) → número', () => {
+    expect(parseScanResult({ page: { status: '200' } }).httpStatus).toBe(200);
+    expect(parseScanResult({ page: { status: '404' } }).httpStatus).toBe(404);
+    expect(parseScanResult({ page: { status: 503 } }).httpStatus).toBe(503);
+  });
+
+  it('page.status ausente ou vazio → httpStatus null (não medido, nunca 0)', () => {
+    expect(parseScanResult({ page: {} }).httpStatus).toBeNull();
+    expect(parseScanResult({ page: { status: '' } }).httpStatus).toBeNull();
+    expect(parseScanResult({ page: { status: 'aborted' } }).httpStatus).toBeNull();
   });
 });

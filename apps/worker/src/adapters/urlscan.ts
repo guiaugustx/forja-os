@@ -156,6 +156,7 @@ export interface ScanResult {
   malicious: boolean; // veredito do próprio urlscan
   domainAgeDays: number | null;
   tlsAgeDays: number | null;
+  httpStatus: number | null; // page.status — status HTTP da página no momento do scan
 }
 
 /** Parse puro do resultado — separado do fetch para ser testável sem rede. */
@@ -163,10 +164,16 @@ export function parseScanResult(json: unknown): ScanResult {
   const d = json as {
     lists?: { domains?: unknown[]; linkDomains?: unknown[] };
     verdicts?: { overall?: { malicious?: boolean } };
-    page?: { domainAgeDays?: number; apexDomainAgeDays?: number; tlsAgeDays?: number };
+    page?: { domainAgeDays?: number; apexDomainAgeDays?: number; tlsAgeDays?: number; status?: unknown };
   };
   const strings = (v: unknown[] | undefined): string[] =>
     (v ?? []).filter((x): x is string => typeof x === 'string' && x.length > 0);
+  // page.status vem como string ("200", "404") no JSON do urlscan — coerção
+  // via Number, mas finiteOrNull descarta "" / não-numérico → null (não medido).
+  const rawStatus = d?.page?.status;
+  const httpStatus = finiteOrNull(
+    typeof rawStatus === 'string' && rawStatus.trim() !== '' ? Number(rawStatus) : rawStatus,
+  );
   return {
     domains: strings(d?.lists?.domains),
     linkDomains: strings(d?.lists?.linkDomains),
@@ -174,6 +181,7 @@ export function parseScanResult(json: unknown): ScanResult {
     domainAgeDays:
       finiteOrNull(d?.page?.domainAgeDays) ?? finiteOrNull(d?.page?.apexDomainAgeDays),
     tlsAgeDays: finiteOrNull(d?.page?.tlsAgeDays),
+    httpStatus,
   };
 }
 

@@ -13,7 +13,7 @@
 import { prisma, Prisma } from '@forja/db';
 import { getScanResult, UrlscanRateLimitError } from '../adapters/urlscan';
 import { detectSignals, selfSignalsFromQuery, subtractSelfSignals, type SignalOrigin } from '../lib/detectSignals';
-import { scaleSignalScore, hasZeroSignal } from '../lib/scaleSignalScore';
+import { scaleSignalScore, hasZeroSignal, type SignalTag } from '../lib/scaleSignalScore';
 
 export interface SignalPassRow {
   id: string;
@@ -39,6 +39,8 @@ export interface SignalPassBudget {
 export interface SignalPassResult {
   measured: number;
   discardedMalicious: string[]; // dedupeKeys — o harvest ajusta contadores com isto
+  discardedStore: string[]; // loja/e-commerce (fora do escopo)
+  discardedDead: string[]; // página fora do ar no scan (HTTP >= 400)
   discardedZeroSignal: string[]; // idem
   notFound: number; // scans expirados (404) — marcados para não re-tentar
   rateLimited: boolean; // true = 429/orçamento interrompeu; o resto ficou null
@@ -70,6 +72,8 @@ export async function runSignalPass(
   const out: SignalPassResult = {
     measured: 0,
     discardedMalicious: [],
+    discardedStore: [],
+    discardedDead: [],
     discardedZeroSignal: [],
     notFound: 0,
     rateLimited: false,
@@ -118,22 +122,42 @@ export async function runSignalPass(
       selfSignalsFromQuery(row.sourceQuery ?? ''),
     );
     const domainAgeDays = row.domainAgeDays ?? result.domainAgeDays;
+    const measuredAt = new Date().toISOString();
 
-    if (result.malicious) {
-      out.discardedMalicious.push(row.dedupeKey);
+    // O JSON de sinais guarda SEMPRE storefronts/marketplaces/httpStatus (via
+    // `...detected` + httpStatus), mesmo quando não descarta, para que uma
+    // mudança de regra futura reavalie por recompute sem gastar retrieve.
+    const buildSignals = (tags?: SignalTag[]): Prisma.InputJsonValue =>
+      ({
+        ...detected,
+        ...(tags ? { tags } : {}),
+        httpStatus: result.httpStatus,
+        measuredAt,
+      }) as unknown as Prisma.InputJsonValue;
+
+    // Descarte por CATEGORIA (reversível pela aba "descartados pela máquina").
+    // Ordem: malicioso → loja/e-commerce → fora do ar. Qualquer um tira da fila;
+    // a ordem só decide a razão exibida quando mais de uma se aplica.
+    const categoryDiscard = result.malicious
+      ? { reason: 'malicioso-urlscan' as const, bucket: out.discardedMalicious }
+      : detected.storefronts.length > 0 || detected.marketplaces.length > 0
+        ? { reason: 'loja-ecommerce' as const, bucket: out.discardedStore }
+        : result.httpStatus != null && result.httpStatus >= 400
+          ? { reason: 'pagina-fora-do-ar' as const, bucket: out.discardedDead }
+          : null;
+
+    if (categoryDiscard) {
+      categoryDiscard.bucket.push(row.dedupeKey);
       await prisma.candidate.update({
         where: { id: row.id },
         data: {
           status: 'discarded_auto',
-          discardReason: 'malicioso-urlscan',
+          discardReason: categoryDiscard.reason,
           scanUuid: uuid,
           domainAgeDays,
           tlsAgeDays: result.tlsAgeDays,
           hasAdPixel: detected.pixels.length > 0,
-          signals: {
-            ...detected,
-            measuredAt: new Date().toISOString(),
-          } as unknown as Prisma.InputJsonValue,
+          signals: buildSignals(),
         },
       });
       await sleep(budget.throttleMs);
@@ -160,11 +184,7 @@ export async function runSignalPass(
         tlsAgeDays: result.tlsAgeDays,
         signalScore: score,
         hasAdPixel: detected.pixels.length > 0,
-        signals: {
-          ...detected,
-          tags,
-          measuredAt: new Date().toISOString(),
-        } as unknown as Prisma.InputJsonValue,
+        signals: buildSignals(tags),
       },
     });
     out.measured++;

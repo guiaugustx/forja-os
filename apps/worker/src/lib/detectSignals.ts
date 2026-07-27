@@ -14,6 +14,13 @@ export interface DetectedSignals {
   trackers: string[]; // atribuição (utmify) — quem rastreia conversão, gasta em tráfego
   players: string[]; // players de VSL (converteai/panda/vturb) — infra paga de vendas
   linkedCheckouts: string[]; // gateways LINKADOS na página (href, não requisição)
+  // Plataformas de LOJA/e-commerce contatadas (Shopify, Nuvemshop, VTEX…). Loja
+  // roda pixel igual a infoproduto, mas está FORA do escopo → não é sinal
+  // positivo, é motivo de descarte de categoria (ver signalPass).
+  storefronts: string[];
+  // Marketplaces LINKADOS (Shopee, Mercado Livre, Amazon…) — mesma lógica de
+  // categoria fora do escopo. Em linkDomains: o link não gera requisição.
+  marketplaces: string[];
   // De onde veio o scan: numa fonte de checkout o scan é do GATEWAY, e os
   // pixels detectados são os instalados no checkout — sinal parcial (muitos
   // produtores instalam pixel lá, mas não prova tráfego na página de vendas).
@@ -63,6 +70,37 @@ const CHECKOUT_DOMAINS: Array<[string, string]> = [
   ['go.perfectpay.com.br', 'perfectpay'],
 ];
 
+// Plataformas de loja/e-commerce, casadas em `domains` (a página CONTATA o CDN
+// da plataforma durante o scan — cdn.shopify.com aparece limpo). NÃO incluir
+// wix/webflow: são site-builders genéricos que hospedam infoproduto também, e
+// dariam falso positivo. Categoria fora do escopo, não sinal.
+const STOREFRONT_DOMAINS: Array<[string, string]> = [
+  ['shopify.com', 'shopify'],
+  ['myshopify.com', 'shopify'],
+  ['shopifycloud.com', 'shopify'],
+  ['shopifysvc.com', 'shopify'],
+  ['nuvemshop.com.br', 'nuvemshop'],
+  ['tiendanube.com', 'nuvemshop'],
+  ['vtex.com', 'vtex'],
+  ['vteximg.com.br', 'vtex'],
+  ['vtexassets.com', 'vtex'],
+  ['lojaintegrada.com.br', 'lojaintegrada'],
+  ['tray.com.br', 'tray'],
+];
+
+// Marketplaces, casados em `linkDomains` (link, não requisição): página que
+// aponta o comprador para Shopee/Mercado Livre/Amazon é revenda de e-commerce,
+// fora do escopo de infoproduto.
+const MARKETPLACE_DOMAINS: Array<[string, string]> = [
+  ['shopee.com.br', 'shopee'],
+  ['mercadolivre.com.br', 'mercadolivre'],
+  ['mercadolibre.com', 'mercadolivre'],
+  ['amazon.com.br', 'amazon'],
+  ['magazineluiza.com.br', 'magalu'],
+  ['magalu.com', 'magalu'],
+  ['aliexpress.com', 'aliexpress'],
+];
+
 function hostMatches(host: string, entry: string): boolean {
   return host === entry || host.endsWith('.' + entry);
 }
@@ -88,6 +126,8 @@ export function detectSignals(
     trackers: collect(domains, TRACKER_DOMAINS),
     players: collect(domains, PLAYER_DOMAINS),
     linkedCheckouts: collect(linkDomains, CHECKOUT_DOMAINS),
+    storefronts: collect(domains, STOREFRONT_DOMAINS),
+    marketplaces: collect(linkDomains, MARKETPLACE_DOMAINS),
     origin,
   };
 }

@@ -14,6 +14,11 @@
  *
  * Uso: pnpm --filter @forja/worker backfill:signals -- [--budget 9000]
  *      [--sample 500] [--throttle-ms 500] [--dry-run] [--skip-scam]
+ *
+ * Modos especiais (exclusivos):
+ *   --recompute         recalcula score/tags a partir do JSON gravado (sem rede)
+ *   --recheck-category  re-retrieve dos já medidos SEM httpStatus, para aplicar
+ *                       as regras de categoria novas (loja/página morta)
  */
 import { prisma, Prisma } from '@forja/db';
 import { isScamCategory } from '../src/lib/filters';
@@ -66,11 +71,13 @@ async function recomputePass(): Promise<void> {
   });
   let changed = 0, discarded = 0, undiscarded = 0;
   for (const c of medidos) {
-    const raw = c.signals as unknown as (DetectedSignals & { tags?: string[]; measuredAt?: string }) | null;
+    const raw = c.signals as unknown as (DetectedSignals & { tags?: string[]; measuredAt?: string; httpStatus?: number | null }) | null;
     if (!raw || !Array.isArray(raw.pixels)) continue;
     const clean = subtractSelfSignals(
       { pixels: raw.pixels, trackers: raw.trackers ?? [], players: raw.players ?? [],
-        linkedCheckouts: raw.linkedCheckouts ?? [], origin: raw.origin ?? 'sales-page' } as DetectedSignals,
+        linkedCheckouts: raw.linkedCheckouts ?? [],
+        storefronts: raw.storefronts ?? [], marketplaces: raw.marketplaces ?? [],
+        origin: raw.origin ?? 'sales-page' } as DetectedSignals,
       selfSignalsFromQuery(c.source.query),
     );
     const { score, tags } = scaleSignalScore({
@@ -89,7 +96,7 @@ async function recomputePass(): Promise<void> {
       data: {
         signalScore: score,
         hasAdPixel: clean.pixels.length > 0,
-        signals: { ...clean, tags, measuredAt: raw.measuredAt ?? new Date().toISOString() } as never,
+        signals: { ...clean, tags, httpStatus: raw.httpStatus ?? null, measuredAt: raw.measuredAt ?? new Date().toISOString() } as never,
         ...(shouldDiscard ? { status: 'discarded_auto' as const, discardReason: 'sem-sinal-trafego' } : {}),
         ...(shouldRestore ? { status: 'pending' as const, discardReason: null } : {}),
       },
@@ -99,9 +106,66 @@ async function recomputePass(): Promise<void> {
   console.log(`recompute: ${changed} recalculados · ${discarded} novos descartes sem-sinal · ${undiscarded} restaurados`);
 }
 
+/**
+ * Re-retrieve dos candidatos JÁ MEDIDOS cujo JSON ainda não tem `httpStatus`
+ * (foram medidos antes das regras de categoria loja/página-morta). Reaplica
+ * TODAS as regras via runSignalPass, gravando storefronts/marketplaces/
+ * httpStatus. Barato (<900 itens na cota de 10k/dia) e resumível: quem já
+ * ganhou httpStatus sai da fila. O fluxo normal (não-medidos) já nasce com as
+ * regras — este modo existe só para o backlog já medido.
+ */
+async function recheckCategoryPass(budget: { remaining: number; throttleMs: number }): Promise<void> {
+  const medidos = await prisma.candidate.findMany({
+    where: { signalScore: { not: null } },
+    orderBy: { hitCount: 'desc' },
+    select: {
+      id: true, dedupeKey: true, scanUuid: true, screenshotUrl: true, hitCount: true,
+      daysRunning: true, lastSeenAt: true, domainAgeDays: true, signals: true,
+      source: { select: { kind: true, query: true } },
+    },
+  });
+  const fila = medidos.filter((c) => {
+    const s = c.signals as { httpStatus?: unknown } | null;
+    return !s || s.httpStatus === undefined; // sem httpStatus → nunca passou pelas regras novas
+  });
+  console.log(`recheck-category · ${fila.length} já medidos sem httpStatus (de ${medidos.length})`);
+  if (fila.length === 0) return;
+
+  const rows: SignalPassRow[] = fila.map((b) => ({
+    id: b.id,
+    dedupeKey: b.dedupeKey,
+    scanUuid: b.scanUuid,
+    screenshotUrl: b.screenshotUrl,
+    hitCount: b.hitCount,
+    daysRunning: b.daysRunning,
+    lastSeenAt: b.lastSeenAt,
+    domainAgeDays: b.domainAgeDays,
+    originKind: b.source.kind === 'checkout' ? 'checkout' : 'sales-page',
+    sourceQuery: b.source.query,
+  }));
+
+  const out = await runSignalPass(rows, budget);
+  console.log(
+    `recheck-category · +${out.measured} reavaliados · lojas=${out.discardedStore.length} · ` +
+      `fora-do-ar=${out.discardedDead.length} · sem-sinal=${out.discardedZeroSignal.length} · ` +
+      `maliciosos=${out.discardedMalicious.length} · scans expirados=${out.notFound} · ` +
+      `budget restante ${budget.remaining}`,
+  );
+  if (out.rateLimited) {
+    console.log('  ⚠ limite do urlscan/orçamento atingido — rode de novo depois; é resumível.');
+  }
+}
+
 async function main() {
   if (has('recompute')) {
     await recomputePass();
+    return;
+  }
+
+  if (has('recheck-category')) {
+    const budget = { remaining: arg('budget', 9000), throttleMs: arg('throttle-ms', 500) };
+    console.log(`recheck-category — budget=${budget.remaining} throttle=${budget.throttleMs}ms`);
+    await recheckCategoryPass(budget);
     return;
   }
 

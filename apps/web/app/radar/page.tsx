@@ -36,6 +36,19 @@ import type {
 // das 20 últimas.
 const RUN_STUCK_AFTER_MS = 15 * 60 * 1000;
 
+// Rótulos amigáveis das razões de descarte automático (a máquina grava o slug).
+const DISCARD_REASON_LABELS: Record<string, string> = {
+  'golpe-phishing': 'Golpe / phishing',
+  'delivery-comida': 'Delivery / comida',
+  'malicioso-urlscan': 'Malicioso (urlscan)',
+  'sem-sinal-trafego': 'Sem sinal de tráfego',
+  'sem-circulacao': 'Sem circulação',
+  'loja-ecommerce': 'Loja / e-commerce',
+  'pagina-fora-do-ar': 'Fora do ar no scan',
+};
+const discardReasonLabel = (reason: string | null | undefined): string =>
+  reason ? (DISCARD_REASON_LABELS[reason] ?? reason) : 'pelo filtro';
+
 function isRunActuallyRunning(run: IngestionRunDTO): boolean {
   if (run.status !== 'running') return false;
   return Date.now() - new Date(run.startedAt).getTime() < RUN_STUCK_AFTER_MS;
@@ -768,7 +781,7 @@ export default function RadarPage() {
                     <div className="truncate text-[11.5px] text-neutral-500">{c.title ?? '—'}</div>
                   </div>
                   <Chip size="sm" variant="soft" color={c.status === 'discarded_manual' ? 'default' : 'danger'}>
-                    {c.status === 'discarded_manual' ? 'por você' : (c.discardReason ?? 'pelo filtro')}
+                    {c.status === 'discarded_manual' ? 'por você' : discardReasonLabel(c.discardReason)}
                   </Chip>
                   <Button size="sm" variant="ghost" onPress={() => restore.mutate(c.id)}>
                     Trazer de volta

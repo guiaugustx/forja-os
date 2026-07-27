@@ -19,8 +19,27 @@ pela máquina"):
 | `golpe-phishing` | blocklist textual de golpe ("consulta cpf", "recarga free fire", "gov.br", "leilão"...) | sim — categoria |
 | `delivery-comida` | blocklist de restaurante/delivery | sim — categoria |
 | `malicioso-urlscan` | veredito de malicioso do próprio urlscan no scan da página | sim — categoria |
+| `loja-ecommerce` | plataforma de loja contatada (Shopify, Nuvemshop, VTEX, Loja Integrada, Tray) ou marketplace linkado (Shopee, Mercado Livre, Amazon, Magalu, AliExpress) | sim — categoria |
+| `pagina-fora-do-ar` | página com HTTP ≥ 400 no momento do scan (`page.status`) | sim — categoria |
 | `sem-sinal-trafego` | **medido** com zero pixel, tracker e player | sim* |
 | `sem-circulacao` | último scan mais velho que a janela da fonte | **não — temporal**: re-avistamento recente ressuscita o candidato sozinho |
+
+**Loja e página morta** são detectadas de graça no MESMO retrieve do signal pass:
+`cdn.shopify.com` aparece limpo em `lists.domains`; o marketplace linkado em
+`lists.linkDomains`; o status HTTP em `page.status`. O pixel é sinal
+*necessário, não suficiente* — loja e VSL de físico também rodam pixel, então
+subiam no ranking; a regra de categoria as tira da fila sem desligar o pixel
+como sinal de ordenação para o que é infoproduto. `wix`/`webflow` **não** contam
+como loja (site-builder genérico hospeda infoproduto — falso positivo). Produto
+físico "puro" em domínio próprio não tem sinal barato confiável e segue para o
+enriquecimento, onde o alerta `produto-physical` da IA o pega.
+
+**Por que o JSON de sinais guarda `storefronts`, `marketplaces` e `httpStatus`
+mesmo quando não descarta:** para que uma mudança de regra futura reavalie o
+backlog por `recompute` (sem rede) em vez de gastar retrieve. Os já medidos
+ANTES dessas regras não têm `httpStatus` no JSON — o modo
+`backfill:signals --recheck-category` faz o re-retrieve deles (barato, <1k na
+cota de 10k/dia) e grava os campos novos.
 
 *Decisão de produto: candidato medido sem nenhuma evidência de investimento sai
 da fila. Reversível como os demais.
