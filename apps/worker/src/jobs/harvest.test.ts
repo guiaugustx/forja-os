@@ -41,7 +41,7 @@ const hit = (over: Partial<RawHit>): RawHit => ({
   ...over,
 });
 
-const source = { id: 'src-1', minHitCount: 1, maxAgeDays: 90 };
+const source = { id: 'src-1', minHitCount: 1, maxAgeDays: 90, query: 'domain:cdn.utmify.com.br' };
 
 function callbacks() {
   const onNew = vi.fn();

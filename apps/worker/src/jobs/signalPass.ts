@@ -12,7 +12,7 @@
 
 import { prisma, Prisma } from '@forja/db';
 import { getScanResult, UrlscanRateLimitError } from '../adapters/urlscan';
-import { detectSignals, type SignalOrigin } from '../lib/detectSignals';
+import { detectSignals, selfSignalsFromQuery, subtractSelfSignals, type SignalOrigin } from '../lib/detectSignals';
 import { scaleSignalScore, hasZeroSignal } from '../lib/scaleSignalScore';
 
 export interface SignalPassRow {
@@ -25,6 +25,10 @@ export interface SignalPassRow {
   lastSeenAt: Date | null;
   domainAgeDays: number | null;
   originKind: SignalOrigin;
+  // Query da fonte — usada para subtrair o sinal TAUTOLÓGICO (o critério da
+  // própria busca não é evidência: todo candidato da fonte Utmify contata
+  // utmify.com.br por definição).
+  sourceQuery: string;
 }
 
 export interface SignalPassBudget {
@@ -109,7 +113,10 @@ export async function runSignalPass(
       continue;
     }
 
-    const detected = detectSignals(result.domains, result.linkDomains, row.originKind);
+    const detected = subtractSelfSignals(
+      detectSignals(result.domains, result.linkDomains, row.originKind),
+      selfSignalsFromQuery(row.sourceQuery ?? ''),
+    );
     const domainAgeDays = row.domainAgeDays ?? result.domainAgeDays;
 
     if (result.malicious) {

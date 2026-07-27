@@ -204,7 +204,7 @@ export async function harvest(job: Job<HarvestJobData>) {
 export async function ingestPage(
   hits: RawHit[],
   kind: HarvestKind,
-  source: { id: string; minHitCount: number; maxAgeDays: number },
+  source: { id: string; minHitCount: number; maxAgeDays: number; query: string },
   runId: string,
   cb: {
     onNew: () => void;
@@ -328,6 +328,7 @@ export async function ingestPage(
   const passRows: SignalPassRow[] = toMeasure.map((t) => ({
     ...t,
     originKind: kind === 'checkout' ? 'checkout' : 'sales-page',
+    sourceQuery: source.query,
   }));
   const pass = await runSignalPass(passRows, signalBudget);
   for (const key of pass.discardedMalicious) cb.onSignalDiscard(key, 'malicioso-urlscan');

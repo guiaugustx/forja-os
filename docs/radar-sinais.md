@@ -98,3 +98,29 @@ descartaria candidatos por falha de infraestrutura.
 - **SimilarWeb e afins** — pagos, fracos em domínio pequeno.
 - **`minHitCount ≥ 2`** — mataria exatamente as ofertas recém-nascidas que a
   tag ⚡ existe para pegar.
+
+## Resultado da amostra de 500 (2026-07-26)
+
+Primeira medição real, nos 500 pendentes de maior circulação (491 medidos com
+sucesso, 0 scans expirados, ~6 min, 500 retrieves de 10.000/dia):
+
+| Desfecho | Quantidade |
+|---|---:|
+| Continuam na fila, com score | 419 |
+| Descartados: zero sinal medido | 72 |
+| Descartados: veredito malicioso do urlscan | 9 |
+| (fase 1, sem retrieve) golpe/phishing | 312 |
+
+Distribuição do score entre os 419: **5** em 75+, **112** em 50–74, **232** em
+25–49, **70** em 1–24. **361 têm pixel de anúncio** (86%), 35 com a tag
+⚡ escalando-agora, 229 com ✓ comprovada.
+
+O topo da fila ordenada por sinal passou a ser quiz-funnel, nutra e curso com
+pixel Meta+TikTok+Google simultâneos — e o 11º colocado é um domínio de **25
+dias** com 3 pixels: exatamente a antecipação que o desenho persegue.
+
+Correção que a amostra pegou: o sinal TAUTOLÓGICO da fonte (todo candidato da
+fonte Utmify contata utmify.com.br por definição) estava inflando o score e
+anulando o descarte por zero sinal — subtraído desde então
+(`selfSignalsFromQuery`), com recompute aplicado aos já medidos sem gastar
+retrieve.

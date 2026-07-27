@@ -18,6 +18,12 @@
 import { prisma, Prisma } from '@forja/db';
 import { isScamCategory } from '../src/lib/filters';
 import { runSignalPass, type SignalPassRow } from '../src/jobs/signalPass';
+import {
+  selfSignalsFromQuery,
+  subtractSelfSignals,
+  type DetectedSignals,
+} from '../src/lib/detectSignals';
+import { scaleSignalScore, hasZeroSignal } from '../src/lib/scaleSignalScore';
 
 function arg(name: string, fallback: number): number {
   const i = process.argv.indexOf(`--${name}`);
@@ -44,7 +50,61 @@ async function scamPass(dryRun: boolean): Promise<number> {
   return ids.length;
 }
 
+/**
+ * Recalcula score/tags/descartes dos candidatos JÁ MEDIDOS a partir do JSON
+ * gravado — sem gastar retrieve. Existe para correções de regra (ex.: a
+ * subtração do sinal tautológico da fonte entrou depois da primeira amostra).
+ */
+async function recomputePass(): Promise<void> {
+  const medidos = await prisma.candidate.findMany({
+    where: { signalScore: { not: null } },
+    select: {
+      id: true, status: true, discardReason: true, signals: true, hitCount: true,
+      daysRunning: true, lastSeenAt: true, domainAgeDays: true,
+      source: { select: { query: true } },
+    },
+  });
+  let changed = 0, discarded = 0, undiscarded = 0;
+  for (const c of medidos) {
+    const raw = c.signals as unknown as (DetectedSignals & { tags?: string[]; measuredAt?: string }) | null;
+    if (!raw || !Array.isArray(raw.pixels)) continue;
+    const clean = subtractSelfSignals(
+      { pixels: raw.pixels, trackers: raw.trackers ?? [], players: raw.players ?? [],
+        linkedCheckouts: raw.linkedCheckouts ?? [], origin: raw.origin ?? 'sales-page' } as DetectedSignals,
+      selfSignalsFromQuery(c.source.query),
+    );
+    const { score, tags } = scaleSignalScore({
+      signals: clean, hitCount: c.hitCount, daysRunning: c.daysRunning,
+      lastSeenAt: c.lastSeenAt ? c.lastSeenAt.toISOString() : null, domainAgeDays: c.domainAgeDays,
+    });
+    const zero = hasZeroSignal(clean);
+    // Política de zero sinal só mexe em quem está pending ou em quem ESTA regra
+    // descartou — decisão humana e outras categorias ficam intactas.
+    const shouldDiscard = zero && c.status === 'pending';
+    const shouldRestore = !zero && c.status === 'discarded_auto' && c.discardReason === 'sem-sinal-trafego';
+    if (shouldDiscard) discarded++;
+    if (shouldRestore) undiscarded++;
+    await prisma.candidate.update({
+      where: { id: c.id },
+      data: {
+        signalScore: score,
+        hasAdPixel: clean.pixels.length > 0,
+        signals: { ...clean, tags, measuredAt: raw.measuredAt ?? new Date().toISOString() } as never,
+        ...(shouldDiscard ? { status: 'discarded_auto' as const, discardReason: 'sem-sinal-trafego' } : {}),
+        ...(shouldRestore ? { status: 'pending' as const, discardReason: null } : {}),
+      },
+    });
+    changed++;
+  }
+  console.log(`recompute: ${changed} recalculados · ${discarded} novos descartes sem-sinal · ${undiscarded} restaurados`);
+}
+
 async function main() {
+  if (has('recompute')) {
+    await recomputePass();
+    return;
+  }
+
   const budget = { remaining: arg('budget', 9000), throttleMs: arg('throttle-ms', 500) };
   const sample = arg('sample', 0); // 0 = sem limite de amostra
   const batchSize = arg('batch', 200);
@@ -93,7 +153,7 @@ async function main() {
         daysRunning: true,
         lastSeenAt: true,
         domainAgeDays: true,
-        source: { select: { kind: true } },
+        source: { select: { kind: true, query: true } },
       },
     });
     if (batch.length === 0) break;
@@ -109,6 +169,7 @@ async function main() {
       lastSeenAt: b.lastSeenAt,
       domainAgeDays: b.domainAgeDays,
       originKind: b.source.kind === 'checkout' ? 'checkout' : 'sales-page',
+      sourceQuery: b.source.query,
     }));
 
     const out = await runSignalPass(rows, budget);

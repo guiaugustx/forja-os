@@ -46,3 +46,28 @@ describe('detectSignals', () => {
     expect(detectSignals([], [], 'checkout').origin).toBe('checkout');
   });
 });
+
+describe('selfSignalsFromQuery / subtractSelfSignals — tautologia da fonte', () => {
+  it('fonte utmify exclui o tracker utmify; converteai exclui o player', async () => {
+    const { selfSignalsFromQuery, subtractSelfSignals } = await import('./detectSignals');
+    expect(selfSignalsFromQuery('domain:cdn.utmify.com.br').trackers).toEqual(['utmify']);
+    expect(selfSignalsFromQuery('domain:cdn.converteai.net').players).toEqual(['converteai']);
+    expect(selfSignalsFromQuery('page.domain:pay.cakto.com.br').trackers).toEqual([]);
+
+    const detected = detectSignals(
+      ['tracking.utmify.com.br', 'connect.facebook.net'],
+      [],
+      'sales-page',
+    );
+    const clean = subtractSelfSignals(detected, selfSignalsFromQuery('domain:cdn.utmify.com.br'));
+    expect(clean.trackers).toEqual([]); // tautológico removido
+    expect(clean.pixels).toEqual(['facebook']); // evidência real preservada
+  });
+
+  it('query invertida (AND NOT page.domain) também exclui', async () => {
+    const { selfSignalsFromQuery } = await import('./detectSignals');
+    const self = selfSignalsFromQuery('domain:pay.hotmart.com AND NOT page.domain:pay.hotmart.com');
+    expect(self.trackers).toEqual([]);
+    expect(self.pixels).toEqual([]);
+  });
+});

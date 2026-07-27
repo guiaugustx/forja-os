@@ -91,3 +91,35 @@ export function detectSignals(
     origin,
   };
 }
+
+/**
+ * Rótulos tautológicos de uma fonte: o sinal que coincide com o critério da
+ * PRÓPRIA busca não é evidência. Todo candidato da fonte Utmify contata
+ * utmify.com.br por definição — contar isso como tracker inflaria o score da
+ * fonte inteira e anularia o descarte por zero sinal (mesma regra que o
+ * computeTraffic do enrich já aplicava: "utmify é o critério da busca").
+ * Extrai os domínios da query (`domain:X`, `page.domain:X`) e devolve os
+ * rótulos que eles ativariam, para o chamador subtrair do detectado.
+ */
+export function selfSignalsFromQuery(query: string): {
+  pixels: PixelPlatform[];
+  trackers: string[];
+  players: string[];
+} {
+  const domains = [...query.matchAll(/(?:page\.)?domain:([a-z0-9.-]+)/gi)].map((m) => m[1]);
+  const self = detectSignals(domains, [], 'sales-page');
+  return { pixels: self.pixels, trackers: self.trackers, players: self.players };
+}
+
+/** Remove de `detected` os rótulos tautológicos da fonte. */
+export function subtractSelfSignals(
+  detected: DetectedSignals,
+  self: { pixels: PixelPlatform[]; trackers: string[]; players: string[] },
+): DetectedSignals {
+  return {
+    ...detected,
+    pixels: detected.pixels.filter((p) => !self.pixels.includes(p)),
+    trackers: detected.trackers.filter((t) => !self.trackers.includes(t)),
+    players: detected.players.filter((p) => !self.players.includes(p)),
+  };
+}
