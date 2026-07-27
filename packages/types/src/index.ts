@@ -1,38 +1,5 @@
 // Tipos compartilhados entre web, api e worker.
 
-export type Market = 'BR' | 'US' | 'ES';
-
-export type ProductStage =
-  | 'validation'
-  | 'production'
-  | 'funnel'
-  | 'launch'
-  | 'scaling'
-  | 'paused';
-
-export interface ProductBrief {
-  persona?: string;
-  promise?: string;
-  format?: string;
-  angle?: string;
-}
-
-export interface DashboardSummary {
-  revenue30dCents: number;
-  adSpend30dCents: number;
-  sales30d: number;
-  activeProducts: number;
-  pipelineProducts: number;
-  balances: GatewayBalanceDTO[];
-}
-
-export interface GatewayBalanceDTO {
-  gateway: string;
-  availableCents: number;
-  pendingCents: number;
-  currency: string;
-}
-
 // ============================================================
 // RADAR — raio-x da oferta minerada (extraído pela IA na ingestão)
 // ============================================================

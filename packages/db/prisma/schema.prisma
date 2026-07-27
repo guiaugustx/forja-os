@@ -484,16 +484,6 @@ model GatewayBalance {
   syncedAt       DateTime @default(now())
 }
 
-model FxRate {
-  id    String   @id @default(cuid())
-  base  String
-  quote String
-  rate  Float
-  date  DateTime
-
-  @@unique([base, quote, date])
-}
-
 // ============================================================
 // INTEGRAÇÕES / INFRA
 // ============================================================
@@ -506,15 +496,4 @@ model Integration {
   meta           Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-}
-
-model WebhookEvent {
-  id              String    @id @default(cuid())
-  provider        String
-  externalEventId String
-  payload         Json
-  processedAt     DateTime?
-  createdAt       DateTime  @default(now())
-
-  @@unique([provider, externalEventId])
 }
