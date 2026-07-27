@@ -20,6 +20,54 @@ function fmtPrice(cents: number | null): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+// Rótulos curtos dos pixels para a coluna caber em tabela densa.
+const PIXEL_SHORT: Record<string, string> = {
+  facebook: 'fb',
+  tiktok: 'tt',
+  google: 'gg',
+  kwai: 'kw',
+  pinterest: 'pin',
+  taboola: 'tb',
+};
+
+// Coluna de sinais: evidência de investimento em tráfego medida na colheita.
+// signalScore null ≠ 0 — "—" é "não medido", 0 é "medido e sem nada"; a
+// distinção é contrato do backfill e não pode sumir na exibição.
+function SignalCell({ c }: { c: CandidateDTO }) {
+  if (c.signalScore == null) {
+    return <span className="text-[11px] text-neutral-600">—</span>;
+  }
+  const tags = c.signals?.tags ?? [];
+  return (
+    <div className="flex items-center gap-1">
+      <b className="tabular-nums">{c.signalScore}</b>
+      {tags.includes('escalando-agora') && (
+        <span title="Domínio jovem já investindo em tráfego — dá para antecipar">⚡</span>
+      )}
+      {tags.includes('comprovada') && <span title="Roda há 60+ dias com pixel">✓</span>}
+      {(c.signals?.pixels ?? []).map((p) => (
+        <Chip key={p} size="sm" variant="soft" color="accent">
+          {PIXEL_SHORT[p] ?? p}
+        </Chip>
+      ))}
+      {(c.signals?.trackers ?? []).length > 0 && (
+        <span title="Tracker de atribuição">
+          <Chip size="sm" variant="soft" color="warning">
+            utm
+          </Chip>
+        </span>
+      )}
+      {(c.signals?.players ?? []).length > 0 && (
+        <span title="Player de VSL">
+          <Chip size="sm" variant="soft" color="success">
+            vsl
+          </Chip>
+        </span>
+      )}
+    </div>
+  );
+}
+
 // Tabela densa: ~20 candidatos por tela. O objetivo é comparar antes de decidir e
 // resolver blocos inteiros de uma vez — por isso a linha é baixa e o screenshot
 // pequeno, ampliando só no hover.
@@ -40,7 +88,7 @@ export function TriageTable({ items, selected, onToggle, onToggleAll, onDecide, 
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[900px] text-[13px]">
+      <table className="w-full min-w-[1020px] text-[13px]">
         <thead>
           <tr className="text-left text-[11px] uppercase tracking-wide text-neutral-500">
             <th className="w-8 p-2">
@@ -56,6 +104,7 @@ export function TriageTable({ items, selected, onToggle, onToggleAll, onDecide, 
             <th className="p-2">Oferta</th>
             <th className="w-24 p-2">Dias no ar</th>
             <th className="w-20 p-2">Hits</th>
+            <th className="w-44 p-2">Sinais</th>
             <th className="w-32 p-2">Fonte</th>
             <th className="w-40 p-2 text-right">Decisão</th>
           </tr>
@@ -105,6 +154,9 @@ export function TriageTable({ items, selected, onToggle, onToggleAll, onDecide, 
                 )}
               </td>
               <td className="p-2 tabular-nums">{c.hitCount}</td>
+              <td className="p-2">
+                <SignalCell c={c} />
+              </td>
               <td className="p-2 text-[11.5px] text-neutral-400">{c.source.name}</td>
               <td className="whitespace-nowrap p-2 text-right">
                 {/* Button (react-aria) não repassa `title` nativo — o span em volta

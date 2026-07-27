@@ -35,7 +35,13 @@ export const candidateListQuerySchema = z.object({
     .default('pending'),
   sourceId: z.string().min(1).optional(),
   reason: z.string().min(1).optional(),
-  sort: z.enum(['days', 'recent', 'hits']).optional(),
+  sort: z.enum(['days', 'recent', 'hits', 'signal']).optional(),
+  // "true" filtra a fila para só candidatos com pixel de anúncio MEDIDO —
+  // é o corte mais forte de "alguém paga tráfego para isto".
+  withPixel: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => v === 'true'),
   cursor: z.string().min(1).optional(),
   // Ausente (chave nem aparece no objeto de query) cai no default(50) do Zod,
   // que atua antes da coerção. Presente e vazio (?take=, o que URLSearchParams

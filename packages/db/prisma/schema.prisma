@@ -84,6 +84,13 @@ model Candidate {
   firstSeenAt   DateTime?
   lastSeenAt    DateTime?
   daysRunning   Int             @default(0)
+  // ── Sinais de escala (medidos via retrieve do urlscan, cota própria 10k/dia) ──
+  scanUuid      String? // uuid do scan mais recente — chave do retrieve
+  domainAgeDays Int? // idade do domínio no momento do scan
+  tlsAgeDays    Int?
+  signalScore   Int? // null = NÃO MEDIDO; 0 = medido e sem sinal. A distinção é contrato.
+  signals       Json? // {pixels[],trackers[],players[],linkedCheckouts[],origin,tags[],measuredAt,error?}
+  hasAdPixel    Boolean? // derivado de signals.pixels — existe só para filtro/índice
   status        CandidateStatus @default(pending)
   discardReason String?
   triagedAt     DateTime?
@@ -104,6 +111,8 @@ model Candidate {
   // Filtro por motivo de descarte cai quase sempre em discarded_auto, a maior
   // partição do pool — sem índice composto é sequential scan nela inteira.
   @@index([status, discardReason])
+  @@index([status, signalScore])
+  @@index([status, hasAdPixel, signalScore])
 }
 
 enum OfferStage {

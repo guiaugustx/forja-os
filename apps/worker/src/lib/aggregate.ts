@@ -15,6 +15,12 @@ export interface RawHit {
   title: string | null;
   time: string | null;
   referer: string | null;
+  // Idades que a Search API já devolve de graça e que antes eram descartadas.
+  // domainAgeDays alimenta a tag "escalando-agora" (domínio jovem + pixel);
+  // tlsAgeDays é proxy de "quando a página foi montada" quando o domínio é
+  // velho mas o site é novo (subdomínio em lovable/vercel).
+  domainAgeDays: number | null;
+  tlsAgeDays: number | null;
 }
 
 export interface AggregatedCandidate {
@@ -28,6 +34,13 @@ export interface AggregatedCandidate {
   firstSeenAt: string | null;
   lastSeenAt: string | null;
   daysRunning: number;
+  // uuid do scan MAIS RECENTE — é a chave do retrieve de sinais (o scan mais
+  // fresco reflete o estado atual dos pixels da página). Assimetria proposital
+  // com screenshotUrl, que congela no PRIMEIRO hit para não invalidar
+  // screenshots já exibidos na triagem.
+  scanUuid: string | null;
+  domainAgeDays: number | null;
+  tlsAgeDays: number | null;
   // Só preenchidos para fontes de checkout — numa fonte de recurso a URL
   // escaneada já é a página de vendas, e esses três campos não fazem sentido
   // (ver comentário em aggregateHits sobre productName/gateway/priceCents).
@@ -60,6 +73,9 @@ export function aggregateHits(hits: RawHit[], kind: HarvestKind): AggregatedCand
         firstSeenAt: stamp,
         lastSeenAt: stamp,
         daysRunning: 0,
+        scanUuid: h.uuid || null,
+        domainAgeDays: h.domainAgeDays,
+        tlsAgeDays: h.tlsAgeDays,
         // gateway: do host da própria URL escaneada — sai de graça, sem
         // requisição nova. productName: o título da página é o melhor proxy
         // barato que temos do nome do produto numa fonte de checkout.
@@ -78,8 +94,18 @@ export function aggregateHits(hits: RawHit[], kind: HarvestKind): AggregatedCand
     if (!found.referer && h.referer) found.referer = h.referer;
     if (stamp) {
       if (!found.firstSeenAt || stamp < found.firstSeenAt) found.firstSeenAt = stamp;
-      if (!found.lastSeenAt || stamp > found.lastSeenAt) found.lastSeenAt = stamp;
+      if (!found.lastSeenAt || stamp > found.lastSeenAt) {
+        found.lastSeenAt = stamp;
+        // O scanUuid acompanha o hit mais recente: o retrieve de sinais deve
+        // ler o estado mais atual da página, não o primeiro avistamento.
+        if (h.uuid) found.scanUuid = h.uuid;
+        if (h.domainAgeDays != null) found.domainAgeDays = h.domainAgeDays;
+        if (h.tlsAgeDays != null) found.tlsAgeDays = h.tlsAgeDays;
+      }
     }
+    if (found.scanUuid == null && h.uuid) found.scanUuid = h.uuid;
+    if (found.domainAgeDays == null && h.domainAgeDays != null) found.domainAgeDays = h.domainAgeDays;
+    if (found.tlsAgeDays == null && h.tlsAgeDays != null) found.tlsAgeDays = h.tlsAgeDays;
   }
 
   const out = Array.from(byKey.values());

@@ -51,8 +51,12 @@ export class CandidatesService {
     if (params.sourceId) where.sourceId = params.sourceId;
     if (params.reason) where.discardReason = params.reason;
 
+    if (params.withPixel) where.hasAdPixel = true;
+
     const orderBy: Prisma.CandidateOrderByWithRelationInput[] =
-      params.sort === 'days'
+      params.sort === 'signal'
+        ? [{ signalScore: { sort: 'desc', nulls: 'last' } }, { hitCount: 'desc' }, { id: 'asc' }]
+        : params.sort === 'days'
         ? [{ daysRunning: 'desc' }, { id: 'asc' }]
         : params.sort === 'recent'
           ? [{ lastSeenAt: { sort: 'desc', nulls: 'last' } }, { id: 'asc' }]

@@ -9,8 +9,20 @@ import type { RawHit } from '../lib/aggregate';
 interface RawResult {
   _id?: string;
   sort?: unknown[];
-  page?: { url?: string; domain?: string; title?: string };
+  page?: {
+    url?: string;
+    domain?: string;
+    title?: string;
+    domainAgeDays?: number;
+    apexDomainAgeDays?: number;
+    tlsAgeDays?: number;
+  };
   task?: { url?: string; time?: string; referer?: string };
+}
+
+/** Número finito ou null — a API às vezes omite ou devolve lixo nesses campos. */
+function finiteOrNull(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
 export interface SearchPage {
@@ -45,6 +57,11 @@ export function parseSearchResponse(json: unknown): SearchPage {
       title: r.page?.title ?? pageDomain,
       time: r.task?.time ?? null,
       referer: r.task?.referer ?? null,
+      // Preferir a idade do subdomínio quando existir; o apex é o fallback —
+      // num lovable.app/vercel.app o apex é velho (da plataforma), e é a idade
+      // do subdomínio que diz quando ESTA página nasceu.
+      domainAgeDays: finiteOrNull(r.page?.domainAgeDays) ?? finiteOrNull(r.page?.apexDomainAgeDays),
+      tlsAgeDays: finiteOrNull(r.page?.tlsAgeDays),
     });
   }
 
@@ -112,6 +129,75 @@ export async function getDomainActivity(domain: string): Promise<DomainActivity>
     firstSeen: times[0] ?? null,
     lastSeen: times[times.length - 1] ?? null,
   };
+}
+
+// ============================================================
+// Retrieve de resultado — a fonte dos SINAIS DE ESCALA
+// ============================================================
+//
+// GET /api/v1/result/{uuid}/ devolve o scan completo, incluindo lists.domains
+// (todos os domínios que a página CONTATOU — é aqui que pixel de anúncio
+// aparece sem baixar página nenhuma) e lists.linkDomains (domínios LINKADOS —
+// é aqui que checkout aparece, porque link não gera requisição).
+//
+// Cota própria: retrieve = 10.000/dia, separada das 1.000 buscas/dia que a
+// colheita usa e divide com a VPS. 1 retrieve por candidato é viável.
+
+export class UrlscanRateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UrlscanRateLimitError';
+  }
+}
+
+export interface ScanResult {
+  domains: string[]; // lists.domains — domínios contatados durante o scan
+  linkDomains: string[]; // lists.linkDomains — domínios linkados na página
+  malicious: boolean; // veredito do próprio urlscan
+  domainAgeDays: number | null;
+  tlsAgeDays: number | null;
+}
+
+/** Parse puro do resultado — separado do fetch para ser testável sem rede. */
+export function parseScanResult(json: unknown): ScanResult {
+  const d = json as {
+    lists?: { domains?: unknown[]; linkDomains?: unknown[] };
+    verdicts?: { overall?: { malicious?: boolean } };
+    page?: { domainAgeDays?: number; apexDomainAgeDays?: number; tlsAgeDays?: number };
+  };
+  const strings = (v: unknown[] | undefined): string[] =>
+    (v ?? []).filter((x): x is string => typeof x === 'string' && x.length > 0);
+  return {
+    domains: strings(d?.lists?.domains),
+    linkDomains: strings(d?.lists?.linkDomains),
+    malicious: d?.verdicts?.overall?.malicious === true,
+    domainAgeDays:
+      finiteOrNull(d?.page?.domainAgeDays) ?? finiteOrNull(d?.page?.apexDomainAgeDays),
+    tlsAgeDays: finiteOrNull(d?.page?.tlsAgeDays),
+  };
+}
+
+/**
+ * Busca o resultado completo de um scan.
+ * - 404/410 → null (scan expirado/removido — acontece em scans antigos).
+ * - 429 → UrlscanRateLimitError, para o chamador PARAR o pass sem falhar a rodada.
+ */
+export async function getScanResult(uuid: string): Promise<ScanResult | null> {
+  if (!uuid) return null;
+  const key = apiKey();
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (key) headers['API-Key'] = key;
+
+  const res = await fetch(`https://urlscan.io/api/v1/result/${uuid}/`, { headers });
+  if (res.status === 404 || res.status === 410) return null;
+  if (res.status === 429) {
+    throw new UrlscanRateLimitError(`urlscan retrieve 429 para ${uuid}`);
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`urlscan result ${res.status}: ${body.slice(0, 160)}`);
+  }
+  return parseScanResult(await res.json());
 }
 
 /**

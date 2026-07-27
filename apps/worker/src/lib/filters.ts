@@ -51,3 +51,29 @@ export function computeTraffic(i: TrafficInput): { score: number; hasTraffic: bo
   const hasTraffic = adPixels.length >= 1 || i.domainScanCount >= 3;
   return { score, hasTraffic };
 }
+
+// Golpe/phishing — CATEGORIA, não fase: nunca vira oferta modelável. Termos
+// compostos de propósito ("consulta cpf", nunca "cpf" solto) para não matar
+// oferta legítima que cite o termo na copy. Medido contra o backlog real
+// antes de entrar: 322/5.946 pendentes batiam (05%), zero falso positivo na
+// amostra inspecionada. Descarte é reversível pela aba "descartados pela
+// máquina".
+const SCAM_KEYWORDS = [
+  'consulta cpf', 'consulta de cpf', 'consulta nacional de cpf', 'cpf gratuito', 'cpf grátis',
+  'free fire', 'recarga', 'centro de recarga',
+  'leilão', 'leilao', 'lucrando com leil',
+  'gov.br', 'govbr', 'gov-', '-gov.',
+  'inep', 'instituto nacional de estudos',
+  'cnh do brasil', 'cnh social', 'cnh gratuita',
+  'serasa', 'bolsa família', 'bolsa familia', 'auxílio brasil', 'auxilio brasil',
+  'fgts', 'saque emergencial', 'indenização', 'indenizacao', 'premiado', 'premiada',
+  'pix premiado', 'sorteio oficial', 'nota fiscal premiada',
+  'receita federal', 'caixa econômica', 'caixa economica', '13º salário', '13o salario',
+];
+
+// Mesmo contrato do isBlockedCategory: aplicar SÓ a campos estruturados
+// (domínio, título, nome do produto), nunca ao texto livre da página.
+export function isScamCategory(...fields: Array<string | null | undefined>): boolean {
+  const hay = fields.filter(Boolean).join(' ').toLowerCase();
+  return SCAM_KEYWORDS.some((k) => hay.includes(k));
+}

@@ -5,6 +5,7 @@ import { aggregateHits, type RawHit } from '../lib/aggregate';
 import { prefilter } from '../lib/prefilter';
 import { mergeCandidateSignal } from '../lib/mergeCandidate';
 import type { HarvestKind } from '../lib/dedupeKey';
+import { budgetFromEnv, runSignalPass, type SignalPassBudget, type SignalPassRow } from './signalPass';
 
 export interface HarvestJobData {
   runId: string;
@@ -49,6 +50,10 @@ export async function harvest(job: Job<HarvestJobData>) {
   let cursor = source.cursor;
   let partial = false;
   let partialError: string | null = null;
+  // Orçamento de retrieves da rodada inteira (não por página): o signal pass
+  // mede pixels/sinais dos candidatos novos sem nunca poder falhar a rodada.
+  const signalBudget = budgetFromEnv();
+  let signalRateLimited = false;
   // Só permanece true se o laço se esgotar sem nenhum dos breaks de "acabou de
   // verdade" (página vazia, sem próximo cursor, página curta) ser acionado —
   // ou seja, exatamente o caso de bater no teto de MAX_PAGES com cursor sobrando.
@@ -94,7 +99,7 @@ export async function harvest(job: Job<HarvestJobData>) {
       }
       rawHits += result.pageSize;
 
-      await ingestPage(result.hits, source.kind as HarvestKind, source, runId, {
+      const pageOut = await ingestPage(result.hits, source.kind as HarvestKind, source, runId, {
         onNew: () => newCandidates++,
         onDiscard: (key, reason) => {
           autoDiscarded++;
@@ -106,7 +111,17 @@ export async function harvest(job: Job<HarvestJobData>) {
           events.unshift({ key, ok: true });
           if (events.length > 24) events.length = 24;
         },
-      });
+        // Descarte que o signal pass decide DEPOIS de onQueue já ter contado:
+        // o candidato entrou na fila e saiu dela na mesma rodada, então os
+        // contadores precisam ser corrigidos, não somados.
+        onSignalDiscard: (key, reason) => {
+          queuedForTriage--;
+          autoDiscarded++;
+          events.unshift({ key, ok: false, reason });
+          if (events.length > 24) events.length = 24;
+        },
+      }, signalBudget);
+      if (pageOut.signalRateLimited) signalRateLimited = true;
 
       cursor = result.nextCursor;
       if (!cursor || result.pageSize < PAGE_SIZE) {
@@ -130,7 +145,11 @@ export async function harvest(job: Job<HarvestJobData>) {
           ? `Parcial — ${queuedForTriage} na fila (${partialError})`
           : cappedWithMore
             ? `Concluído — ${queuedForTriage} na fila, ${autoDiscarded} filtrados (teto de ${MAX_PAGES} páginas atingido, ainda há mais para colher — a próxima rodada continua daqui)`
-            : `Concluído — ${queuedForTriage} na fila, ${autoDiscarded} filtrados`,
+            : `Concluído — ${queuedForTriage} na fila, ${autoDiscarded} filtrados${
+                signalRateLimited
+                  ? ' · parte ficou sem sinal medido (limite do urlscan) — o backfill completa'
+                  : ''
+              }`,
         rawHits,
         newCandidates,
         autoDiscarded,
@@ -191,15 +210,25 @@ export async function ingestPage(
     onNew: () => void;
     onDiscard: (key: string, reason: string) => void;
     onQueue: (key: string) => void;
+    onSignalDiscard: (key: string, reason: string) => void;
   },
-) {
+  signalBudget: SignalPassBudget,
+): Promise<{ signalRateLimited: boolean }> {
   const candidates = aggregateHits(hits, kind);
-  if (candidates.length === 0) return;
+  if (candidates.length === 0) return { signalRateLimited: false };
 
   const keys = candidates.map((c) => c.dedupeKey);
   const existing = await prisma.candidate.findMany({
     where: { dedupeKey: { in: keys } },
-    select: { id: true, dedupeKey: true, firstSeenAt: true, lastSeenAt: true },
+    select: {
+      id: true,
+      dedupeKey: true,
+      firstSeenAt: true,
+      lastSeenAt: true,
+      status: true,
+      discardReason: true,
+      signalScore: true,
+    },
   });
   const knownByKey = new Map(existing.map((e) => [e.dedupeKey, e]));
 
@@ -213,7 +242,18 @@ export async function ingestPage(
       // candidato já decidido não pode voltar a "pending" só porque a oferta
       // circulou de novo nesta rodada. Também não conta em onNew/onQueue/onDiscard
       // — esses contadores são "candidatos inéditos nesta rodada".
+      //
+      // EXCEÇÃO deliberada — descarte por circulação é um juízo TEMPORAL, não
+      // de categoria: "sem-circulacao" significou "o último scan era velho"
+      // no dia da colheita. Se a página foi re-escaneada AGORA, a razão do
+      // descarte deixou de existir, e o candidato volta à fila. Categoria
+      // (golpe/comida/malicioso) e decisão humana continuam permanentes.
       const merge = mergeCandidateSignal(c, known);
+      const resurrect =
+        known.status === 'discarded_auto' &&
+        known.discardReason === 'sem-circulacao' &&
+        c.lastSeenAt !== null &&
+        (Date.now() - Date.parse(c.lastSeenAt)) / 86_400_000 <= source.maxAgeDays;
       await prisma.candidate.update({
         where: { id: known.id },
         data: {
@@ -221,8 +261,10 @@ export async function ingestPage(
           firstSeenAt: merge.firstSeenAt,
           lastSeenAt: merge.lastSeenAt,
           daysRunning: merge.daysRunning,
+          ...(resurrect ? { status: 'pending' as const, discardReason: null } : {}),
         },
       });
+      if (resurrect) cb.onQueue(c.dedupeKey);
       continue;
     }
 
@@ -251,6 +293,9 @@ export async function ingestPage(
       firstSeenAt: c.firstSeenAt ? new Date(c.firstSeenAt) : null,
       lastSeenAt: c.lastSeenAt ? new Date(c.lastSeenAt) : null,
       daysRunning: c.daysRunning,
+      scanUuid: c.scanUuid,
+      domainAgeDays: c.domainAgeDays,
+      tlsAgeDays: c.tlsAgeDays,
       status: verdict.ok ? 'pending' : 'discarded_auto',
       discardReason: verdict.ok ? null : verdict.reason,
       firstRunId: runId,
@@ -260,4 +305,33 @@ export async function ingestPage(
   if (rows.length > 0) {
     await prisma.candidate.createMany({ data: rows, skipDuplicates: true });
   }
+
+  // ── Signal pass: mede pixels/sinais dos que entraram na fila nesta página ──
+  // Buscar de volta é necessário porque createMany não devolve ids; o filtro
+  // por pending + signalScore null pega os novos desta página E ressuscitados/
+  // conhecidos nunca medidos, sem re-medir quem já tem score (economia de cota).
+  // Descartado pelo prefilter não gasta retrieve.
+  const toMeasure = await prisma.candidate.findMany({
+    where: { dedupeKey: { in: keys }, status: 'pending', signalScore: null, signals: { equals: Prisma.DbNull } },
+    select: {
+      id: true,
+      dedupeKey: true,
+      scanUuid: true,
+      screenshotUrl: true,
+      hitCount: true,
+      daysRunning: true,
+      lastSeenAt: true,
+      domainAgeDays: true,
+    },
+  });
+
+  const passRows: SignalPassRow[] = toMeasure.map((t) => ({
+    ...t,
+    originKind: kind === 'checkout' ? 'checkout' : 'sales-page',
+  }));
+  const pass = await runSignalPass(passRows, signalBudget);
+  for (const key of pass.discardedMalicious) cb.onSignalDiscard(key, 'malicioso-urlscan');
+  for (const key of pass.discardedZeroSignal) cb.onSignalDiscard(key, 'sem-sinal-trafego');
+
+  return { signalRateLimited: pass.rateLimited };
 }

@@ -8,10 +8,10 @@
 // Todo descarte grava o motivo e aparece na aba "descartados pela máquina",
 // para que o filtro não vire caixa-preta.
 
-import { isBlockedCategory } from './filters';
+import { isBlockedCategory, isScamCategory } from './filters';
 import type { AggregatedCandidate } from './aggregate';
 
-export type PrefilterReason = 'delivery-comida' | 'sem-circulacao';
+export type PrefilterReason = 'delivery-comida' | 'sem-circulacao' | 'golpe-phishing';
 
 export interface PrefilterRules {
   minHitCount: number;
@@ -25,6 +25,12 @@ export function prefilter(
   rules: PrefilterRules,
   now: Date = new Date(),
 ): { ok: true } | { ok: false; reason: PrefilterReason } {
+  // Golpe vem primeiro: é o descarte mais certo e roda ANTES de qualquer
+  // gasto de cota com retrieve de sinais (descartado não é medido).
+  if (isScamCategory(c.domain, c.title, c.productName)) {
+    return { ok: false, reason: 'golpe-phishing' };
+  }
+
   if (isBlockedCategory(c.domain, c.title)) return { ok: false, reason: 'delivery-comida' };
 
   if (c.hitCount < rules.minHitCount) return { ok: false, reason: 'sem-circulacao' };

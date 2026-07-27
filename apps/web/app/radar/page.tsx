@@ -49,7 +49,7 @@ const TABS: [TabKey, string][] = [
   ['trends', 'Trends de termos'],
 ];
 
-type SortKey = 'hits' | 'days' | 'recent';
+type SortKey = 'signal' | 'hits' | 'days' | 'recent';
 
 // Trends não muda de comportamento nesta entrega — segue sendo leitura pura.
 interface Trend {
@@ -76,7 +76,10 @@ export default function RadarPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<TabKey>('triage');
   const [sourceId, setSourceId] = useState<string>('all');
-  const [sort, setSort] = useState<SortKey>('hits');
+  // Default por sinal de escala: a fila abre com a maior evidência de
+  // investimento em tráfego no topo — é o que separa oferta escalada de lixo.
+  const [sort, setSort] = useState<SortKey>('signal');
+  const [withPixel, setWithPixel] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [undoId, setUndoId] = useState<string | null>(null);
   const [undoDecision, setUndoDecision] = useState<Decision | null>(null);
@@ -174,9 +177,10 @@ export default function RadarPage() {
     tab === 'discarded' ? (discardedFilter === 'auto' ? 'discarded_auto' : 'discarded_manual') : 'pending';
   const queryString = useMemo(() => {
     const p = new URLSearchParams({ status, sort });
+    if (withPixel) p.set('withPixel', 'true');
     if (sourceId !== 'all') p.set('sourceId', sourceId);
     return p.toString();
-  }, [status, sort, sourceId]);
+  }, [status, sort, sourceId, withPixel]);
 
   // Fila em massa: centenas/milhares de candidatos, não só a primeira página.
   // `useInfiniteQuery` é o caminho direto do TanStack para consumir o
@@ -664,10 +668,20 @@ export default function RadarPage() {
               onChange={(e) => setSort(e.target.value as SortKey)}
               className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[12.5px]"
             >
+              <option value="signal">Ordenar: sinal de escala</option>
               <option value="hits">Ordenar: circulação</option>
               <option value="days">Ordenar: dias no ar</option>
               <option value="recent">Ordenar: visto recentemente</option>
             </select>
+
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[12.5px]">
+              <input
+                type="checkbox"
+                checked={withPixel}
+                onChange={(e) => setWithPixel(e.target.checked)}
+              />
+              só com pixel
+            </label>
 
             {tab === 'discarded' && (
               <div className="flex items-center gap-1 rounded-lg bg-white/5 p-0.5">

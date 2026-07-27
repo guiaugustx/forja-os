@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSearchResponse } from './urlscan';
+import { parseSearchResponse, parseScanResult } from './urlscan';
 
 const payload = {
   results: [
@@ -29,6 +29,8 @@ describe('parseSearchResponse', () => {
       title: 'Método X',
       time: '2026-07-01T10:00:00Z',
       referer: 'https://ig.com',
+      domainAgeDays: null,
+      tlsAgeDays: null,
     });
   });
 
@@ -54,5 +56,64 @@ describe('parseSearchResponse', () => {
 
   it('devolve vazio para payload sem results', () => {
     expect(parseSearchResponse({})).toEqual({ hits: [], nextCursor: null, pageSize: 0 });
+  });
+});
+
+describe('parseSearchResponse — idades do domínio', () => {
+  it('prefere domainAgeDays; apex é fallback (lovable/vercel têm apex velho)', () => {
+    const { hits } = parseSearchResponse({
+      results: [
+        { _id: 'a', page: { url: 'https://a.com/x', domain: 'a.com', domainAgeDays: 12, apexDomainAgeDays: 900, tlsAgeDays: 5 } },
+        { _id: 'b', page: { url: 'https://b.lovable.app/x', domain: 'b.lovable.app', apexDomainAgeDays: 900 } },
+        { _id: 'c', page: { url: 'https://c.com/x', domain: 'c.com' } },
+      ],
+    });
+    expect(hits[0].domainAgeDays).toBe(12);
+    expect(hits[0].tlsAgeDays).toBe(5);
+    expect(hits[1].domainAgeDays).toBe(900);
+    expect(hits[2].domainAgeDays).toBeNull();
+    expect(hits[2].tlsAgeDays).toBeNull();
+  });
+
+  it('valor lixo vira null', () => {
+    const { hits } = parseSearchResponse({
+      results: [{ _id: 'a', page: { url: 'https://a.com', domain: 'a.com', domainAgeDays: 'muitos' } }],
+    });
+    expect(hits[0].domainAgeDays).toBeNull();
+  });
+});
+
+describe('parseScanResult', () => {
+  // Fixture mínima com a FORMA REAL do retrieve (validada ao vivo em 26/07):
+  // lists.domains traz os domínios contatados, lists.linkDomains os linkados.
+  const fixture = {
+    lists: {
+      domains: ['analytics.tiktok.com', 'evaluadoroficial.site', 'tracking.utmify.com.br', 'cdn.utmify.com.br', 'fonts.gstatic.com'],
+      linkDomains: ['pay.kiwify.com.br'],
+    },
+    verdicts: { overall: { malicious: false } },
+    page: { domainAgeDays: 30, tlsAgeDays: 7 },
+  };
+
+  it('extrai domains, linkDomains, veredito e idades', () => {
+    const r = parseScanResult(fixture);
+    expect(r.domains).toContain('analytics.tiktok.com');
+    expect(r.linkDomains).toEqual(['pay.kiwify.com.br']);
+    expect(r.malicious).toBe(false);
+    expect(r.domainAgeDays).toBe(30);
+    expect(r.tlsAgeDays).toBe(7);
+  });
+
+  it('malicioso true propaga', () => {
+    const r = parseScanResult({ ...fixture, verdicts: { overall: { malicious: true } } });
+    expect(r.malicious).toBe(true);
+  });
+
+  it('lists/verdicts ausentes → vazios e false, sem lançar', () => {
+    const r = parseScanResult({});
+    expect(r.domains).toEqual([]);
+    expect(r.linkDomains).toEqual([]);
+    expect(r.malicious).toBe(false);
+    expect(r.domainAgeDays).toBeNull();
   });
 });

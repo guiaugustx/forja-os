@@ -76,6 +76,20 @@ export interface UpdateHarvestSourceInput {
 
 export type CandidateStatus = 'pending' | 'discarded_auto' | 'discarded_manual' | 'promoted';
 
+// Sinais de escala medidos via retrieve do urlscan (1 chamada/candidato).
+// signalScore null = NÃO MEDIDO; 0 = medido e sem sinal — a UI precisa
+// distinguir os dois ("—" vs "0").
+export interface CandidateSignals {
+  pixels: string[]; // facebook | tiktok | google | kwai | pinterest | taboola
+  trackers: string[]; // utmify
+  players: string[]; // converteai | pandavideo | vturb
+  linkedCheckouts: string[];
+  origin: 'sales-page' | 'checkout';
+  tags?: ('escalando-agora' | 'comprovada' | 'multi-canal')[];
+  measuredAt?: string;
+  error?: string; // ex.: 'result-404' (scan expirado)
+}
+
 // Candidato cru da colheita: só o que a varredura do urlscan devolveu.
 export interface CandidateDTO {
   id: string;
@@ -93,6 +107,10 @@ export interface CandidateDTO {
   daysRunning: number;
   status: CandidateStatus;
   discardReason: string | null;
+  signalScore: number | null;
+  signals: CandidateSignals | null;
+  hasAdPixel: boolean | null;
+  domainAgeDays: number | null;
   source: { id: string; name: string; kind: HarvestKind };
 }
 

@@ -53,3 +53,39 @@ describe('prefilter', () => {
     expect(r).toEqual({ ok: true });
   });
 });
+
+describe('prefilter — golpe/phishing', () => {
+  const NOW2 = new Date('2026-07-24T00:00:00Z');
+  const R = { minHitCount: 1, maxAgeDays: 90 };
+  const c = (title: string, domain = 'exemplo.com') => ({
+    dedupeKey: domain, url: `https://${domain}/x`, domain, title,
+    screenshotUrl: null, referer: null, hitCount: 3,
+    firstSeenAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-20T00:00:00Z',
+    daysRunning: 19, productName: null, priceCents: null, gateway: null,
+    scanUuid: null, domainAgeDays: null, tlsAgeDays: null,
+  });
+
+  it('descarta golpe por título composto', () => {
+    expect(prefilter(c('Consulta Nacional de CPF – Regularização'), R, NOW2))
+      .toEqual({ ok: false, reason: 'golpe-phishing' });
+    expect(prefilter(c('Centro de Recarga Free Fire'), R, NOW2))
+      .toEqual({ ok: false, reason: 'golpe-phishing' });
+    expect(prefilter(c('Leilão Linha Branca - Casas Bahia'), R, NOW2))
+      .toEqual({ ok: false, reason: 'golpe-phishing' });
+  });
+
+  it('descarta golpe pelo domínio', () => {
+    expect(prefilter(c('Concurso Público', 'gov-pf.netlify.app'), R, NOW2))
+      .toEqual({ ok: false, reason: 'golpe-phishing' });
+  });
+
+  it('oferta legítima que menciona CPF solto passa', () => {
+    expect(prefilter(c('Planilha de Controle Financeiro Pessoal'), R, NOW2)).toEqual({ ok: true });
+    expect(prefilter(c('Método CPF Blindado de Vendas'), R, NOW2)).toEqual({ ok: true });
+  });
+
+  it('golpe vence comida quando os dois batem (razão mais específica primeiro)', () => {
+    expect(prefilter(c('Recarga Free Fire do Pizza Lover'), R, NOW2))
+      .toEqual({ ok: false, reason: 'golpe-phishing' });
+  });
+});
