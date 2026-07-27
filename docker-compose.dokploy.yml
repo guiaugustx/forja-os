@@ -7,6 +7,8 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    networks:
+      - forja-internal
     environment:
       POSTGRES_USER: forja
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forja}
@@ -22,6 +24,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    networks:
+      - forja-internal
     volumes:
       - forja_redisdata:/data
 
@@ -34,6 +38,9 @@ services:
     image: forja-os
     restart: unless-stopped
     command: node apps/api/dist/main.js
+    networks:
+      - forja-internal
+      - dokploy-network
     # Traefik roteia via domínio para a porta 3333 (configurado no Dokploy).
     expose:
       - '3333'
@@ -68,6 +75,8 @@ services:
     image: forja-os
     restart: unless-stopped
     command: node apps/worker/dist/index.js
+    networks:
+      - forja-internal
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://forja:${POSTGRES_PASSWORD:-forja}@postgres:5432/forja?schema=public
@@ -95,6 +104,8 @@ services:
     restart: unless-stopped
     working_dir: /app/apps/web
     command: node_modules/.bin/next start -H 0.0.0.0 -p 3000
+    networks:
+      - dokploy-network
     # Traefik roteia via domínio para a porta 3000 (configurado no Dokploy).
     expose:
       - '3000'
@@ -103,6 +114,14 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     depends_on:
       - api
+
+networks:
+  # Rede externa do Dokploy (Traefik) — permite rotear web/api por domínio.
+  dokploy-network:
+    external: true
+  # Rede interna do stack (postgres/redis/api/worker se comunicam por aqui).
+  forja-internal:
+    driver: bridge
 
 volumes:
   forja_pgdata:
