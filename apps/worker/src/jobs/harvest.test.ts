@@ -79,6 +79,16 @@ describe('ingestPage — candidato conhecido acumula sinal em vez de congelar', 
     expect(rows[0].hitCount).toBe(1);
   });
 
+  it('candidato resource inédito recebe baseDomain (nome-base sem sufixo)', async () => {
+    findMany.mockResolvedValue([]);
+    const cb = callbacks();
+
+    await ingestPage([hit({})], 'resource', source, 'run-1', cb, BUDGET());
+
+    const rows = createMany.mock.calls[0][0].data;
+    expect(rows[0].baseDomain).toBe('metodoxyz'); // metodoxyz.com.br → metodoxyz
+  });
+
   it('candidato conhecido acumula hitCount por increment, não substitui o valor', async () => {
     findMany.mockResolvedValue([
       {

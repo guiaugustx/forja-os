@@ -12,6 +12,9 @@ import { QueueService } from '../queue/queue.service';
 import type { CandidateListQuery } from './radar.dto';
 import { enrichJobId } from './enrich-job';
 
+import { getDomain } from 'tldts';
+import { resolveTldGroups, type TldGroup } from './tld-groups';
+
 type Decision = 'pipeline' | 'analysis' | 'discard';
 
 // Atraso do job de enrich. Existe para dar tempo do desfazer cancelar o job
@@ -47,11 +50,25 @@ export class CandidatesService {
    * CandidateStatus válido.
    */
   async list(params: CandidateListQuery) {
-    const where: Prisma.CandidateWhereInput = { status: params.status };
-    if (params.sourceId) where.sourceId = params.sourceId;
-    if (params.reason) where.discardReason = params.reason;
+    const baseWhere: Prisma.CandidateWhereInput = { status: params.status };
+    if (params.sourceId) baseWhere.sourceId = params.sourceId;
+    if (params.reason) baseWhere.discardReason = params.reason;
 
-    if (params.withPixel) where.hasAdPixel = true;
+    if (params.withPixel) baseWhere.hasAdPixel = true;
+
+    // Spray de TLD: o MESMO nome-base (baseDomain) espalhado em vários domínios
+    // descartáveis (unlockprofile.{lat,site,xyz}) é um único candidato para o
+    // humano. Só na fila de triagem (pending); colapsa em 1 representante por
+    // grupo (maior signalScore, desempate por hitCount e id) e some com os
+    // irmãos da lista. O representante carrega o nº de TLDs e os ids do grupo
+    // para a ação "descartar grupo".
+    const { nonRepIds, groupByBase } =
+      params.status === 'pending'
+        ? await this.computeTldGroups(baseWhere)
+        : { nonRepIds: [] as string[], groupByBase: new Map<string, TldGroup>() };
+
+    const where: Prisma.CandidateWhereInput =
+      nonRepIds.length > 0 ? { ...baseWhere, id: { notIn: nonRepIds } } : baseWhere;
 
     const orderBy: Prisma.CandidateOrderByWithRelationInput[] =
       params.sort === 'signal'
@@ -84,7 +101,40 @@ export class CandidatesService {
     const page = hasMore ? items.slice(0, params.take) : items;
     const total = await this.prisma.client.candidate.count({ where });
 
-    return { items: page, nextCursor: hasMore ? page[page.length - 1].id : null, total };
+    // Anexa o grupo de spray ao representante (só quando ≥ 2 domínios).
+    const withGroups = page.map((c) => {
+      const g = c.baseDomain ? groupByBase.get(c.baseDomain) : undefined;
+      return g ? { ...c, tldSpread: g.spread, tldSiblingIds: g.siblingIds } : c;
+    });
+
+    return { items: withGroups, nextCursor: hasMore ? page[page.length - 1].id : null, total };
+  }
+
+  /**
+   * Agrupa os candidatos pending pelo baseDomain e resolve, por grupo de ≥ 2
+   * TLDs: quem é o representante (maior signalScore; desempate hitCount desc,
+   * depois id asc — determinístico) e quais os irmãos a esconder da lista.
+   * Varre só id/baseDomain/signalScore/hitCount da partição pending (índice
+   * [status, baseDomain]) — leve. baseDomain null (checkout/IP) nunca entra.
+   */
+  private async computeTldGroups(
+    baseWhere: Prisma.CandidateWhereInput,
+  ): Promise<{ nonRepIds: string[]; groupByBase: Map<string, TldGroup> }> {
+    const scan = await this.prisma.client.candidate.findMany({
+      where: { ...baseWhere, baseDomain: { not: null } },
+      select: { id: true, baseDomain: true, domain: true, signalScore: true, hitCount: true },
+    });
+    // O registrável (com sufixo) vem do domínio via a MESMA PSL/flag que gerou o
+    // baseDomain — é o que distingue spray de TLD real (≥2 registráveis) de
+    // subdomínios de um mesmo registrável.
+    const rows = scan.map((c) => ({
+      id: c.id,
+      baseDomain: c.baseDomain as string,
+      registrable: getDomain(c.domain, { allowPrivateDomains: true }),
+      signalScore: c.signalScore,
+      hitCount: c.hitCount,
+    }));
+    return resolveTldGroups(rows);
   }
 
   async triage(id: string, decision: Decision) {

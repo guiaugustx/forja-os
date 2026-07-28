@@ -12,6 +12,9 @@ interface Props {
   onToggle: (id: string) => void;
   onToggleAll: () => void;
   onDecide: (id: string, decision: Decision) => void;
+  // Descarta o grupo inteiro de spray de TLD (o representante + os irmãos
+  // escondidos), reusando o descarte em lote.
+  onDiscardGroup: (ids: string[]) => void;
   busy: boolean;
 }
 
@@ -71,7 +74,7 @@ function SignalCell({ c }: { c: CandidateDTO }) {
 // Tabela densa: ~20 candidatos por tela. O objetivo é comparar antes de decidir e
 // resolver blocos inteiros de uma vez — por isso a linha é baixa e o screenshot
 // pequeno, ampliando só no hover.
-export function TriageTable({ items, selected, onToggle, onToggleAll, onDecide, busy }: Props) {
+export function TriageTable({ items, selected, onToggle, onToggleAll, onDecide, onDiscardGroup, busy }: Props) {
   const allChecked = items.length > 0 && items.every((c) => selected.has(c.id));
   const someChecked = items.some((c) => selected.has(c.id));
 
@@ -136,8 +139,19 @@ export function TriageTable({ items, selected, onToggle, onToggleAll, onDecide, 
                 )}
               </td>
               <td className="max-w-[380px] p-2">
-                <div className="truncate font-semibold">
-                  {c.source.kind === 'checkout' ? (c.productName ?? c.title ?? c.domain) : c.domain}
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate font-semibold">
+                    {c.source.kind === 'checkout' ? (c.productName ?? c.title ?? c.domain) : c.domain}
+                  </span>
+                  {c.tldSpread != null && c.tldSpread >= 2 && (
+                    <span
+                      title={`Mesmo nome-base em ${c.tldSpread} TLDs (${c.tldSiblingIds?.length ?? c.tldSpread} domínios) — padrão de domínio descartável`}
+                    >
+                      <Chip size="sm" variant="soft" color="warning">
+                        ⚠ {c.tldSpread} TLDs
+                      </Chip>
+                    </span>
+                  )}
                 </div>
                 <div className="truncate text-[11.5px] text-neutral-500">
                   {c.source.kind === 'checkout'
@@ -177,6 +191,23 @@ export function TriageTable({ items, selected, onToggle, onToggleAll, onDecide, 
                     ✕
                   </Button>
                 </span>
+                {c.tldSpread != null && c.tldSpread >= 2 && c.tldSiblingIds && (
+                  <>
+                    {' '}
+                    <span title={`Descartar os ${c.tldSiblingIds.length} domínios deste grupo`}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        isDisabled={busy}
+                        aria-label="Descartar grupo de TLDs"
+                        onPress={() => onDiscardGroup(c.tldSiblingIds!)}
+                        className="text-amber-500"
+                      >
+                        ✕ grupo
+                      </Button>
+                    </span>
+                  </>
+                )}
               </td>
             </tr>
           ))}

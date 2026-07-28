@@ -81,6 +81,12 @@ export interface CandidateDTO {
   signals: CandidateSignals | null;
   hasAdPixel: boolean | null;
   domainAgeDays: number | null;
+  // Spray de TLD (só no representante de um grupo ≥ 2 na fila de triagem): o
+  // mesmo nome-base espalhado em vários domínios descartáveis. tldSpread = nº de
+  // domínios; tldSiblingIds = ids de todos (o representante incluso), para a
+  // ação "descartar grupo". Ausente quando não é grupo.
+  tldSpread?: number;
+  tldSiblingIds?: string[];
   source: { id: string; name: string; kind: HarvestKind };
 }
 

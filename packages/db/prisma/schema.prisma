@@ -91,6 +91,11 @@ model Candidate {
   signalScore   Int? // null = NÃO MEDIDO; 0 = medido e sem sinal. A distinção é contrato.
   signals       Json? // {pixels[],trackers[],players[],linkedCheckouts[],origin,tags[],measuredAt,error?}
   hasAdPixel    Boolean? // derivado de signals.pixels — existe só para filtro/índice
+  // Nome registrável sem sufixo público (tldts): unlockprofile.site → "unlockprofile".
+  // Só para candidatos de fonte RESOURCE (checkout é keyado por URL, o domínio é o
+  // gateway). Agrupa o MESMO nome-base espalhado em vários TLDs (spray de domínio
+  // descartável) para colapsar/sinalizar na triagem. null = checkout ou não-parseável.
+  baseDomain    String?
   status        CandidateStatus @default(pending)
   discardReason String?
   triagedAt     DateTime?
@@ -113,6 +118,8 @@ model Candidate {
   @@index([status, discardReason])
   @@index([status, signalScore])
   @@index([status, hasAdPixel, signalScore])
+  // Agrupamento de spray de TLD na fila de triagem (mesmo baseDomain em pending).
+  @@index([status, baseDomain])
 }
 
 enum OfferStage {

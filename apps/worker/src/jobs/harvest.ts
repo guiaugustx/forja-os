@@ -5,6 +5,7 @@ import { aggregateHits, type RawHit } from '../lib/aggregate';
 import { prefilter } from '../lib/prefilter';
 import { mergeCandidateSignal } from '../lib/mergeCandidate';
 import type { HarvestKind } from '../lib/dedupeKey';
+import { baseDomainOf } from '../lib/baseDomain';
 import { budgetFromEnv, runSignalPass, type SignalPassBudget, type SignalPassRow } from './signalPass';
 
 export interface HarvestJobData {
@@ -296,6 +297,10 @@ export async function ingestPage(
       scanUuid: c.scanUuid,
       domainAgeDays: c.domainAgeDays,
       tlsAgeDays: c.tlsAgeDays,
+      // baseDomain só faz sentido para fonte RESOURCE (dedupeKey = domínio da
+      // oferta). Em checkout o domínio é o gateway, compartilhado por milhares —
+      // agrupar por ele seria um falso spray, então fica null.
+      baseDomain: kind === 'checkout' ? null : baseDomainOf(c.domain),
       status: verdict.ok ? 'pending' : 'discarded_auto',
       discardReason: verdict.ok ? null : verdict.reason,
       firstRunId: runId,

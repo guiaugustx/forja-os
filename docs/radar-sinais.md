@@ -90,6 +90,36 @@ Tags exibidas na triagem:
 - **✓ comprovada** — 60+ dias rodando com pixel.
 - **multi-canal** — 2+ plataformas de pixel.
 
+## Spray de TLD (colapso na triagem)
+
+Pixel é necessário, não suficiente — um funil cinza (ex.: `unlockprofile` /
+`tryreportprofiler`, "veja quem viu seu perfil") compra tráfego Meta/TikTok e,
+no nível de domínio, é idêntico a infoproduto legítimo. O tell que o separa é
+operacional: a MESMA oferta espalhada em vários TLDs descartáveis
+(`contahoje.{click,sbs,lat,cfd,lol,cyou}`) para queimar domínio e escapar de ban
+de conta de anúncio.
+
+Detecção (fase não descarta, estrutura sim — aqui a estrutura é o padrão de
+domínio, não a cara da página):
+
+- `Candidate.baseDomain` = nome registrável **sem** sufixo (SLD), via `tldts`
+  com **`allowPrivateDomains: true`**. A flag é obrigatória: sem ela, todo site
+  em `pages.dev`/`vercel.app`/`netlify.app`/`lovable.app`/`myshopify.com`
+  (seção PRIVADA da PSL) colapsaria num único nome-base falso ("pages" ×179),
+  sumindo com ofertas distintas. Só populado para fonte **resource** (checkout é
+  keyado por URL; o domínio é o gateway → `null`).
+- **Spray = mesmo `baseDomain` em ≥ 2 REGISTRÁVEIS distintos** (`getDomain`, com
+  sufixo). O corte é por registráveis, não por candidatos: subdomínios de um
+  mesmo registrável (`fra./esp.safefamilymonitor.com`) ou vários sellers numa
+  plataforma compartilhada (`x./y.mundoactivo.online`) contam como 1 e **não**
+  são spray — colapsá-los sumiria com ofertas distintas.
+
+Na fila de triagem (só `pending`) o grupo **colapsa** em 1 representante (maior
+`signalScore`; desempate `hitCount` desc, `id` asc), com chip `⚠ N TLDs` e ação
+"descartar grupo" (reusa o descarte em lote sobre todos os irmãos). Não mexe no
+score — ordena por evidência, e o humano decide. Índice `[status, baseDomain]`.
+Backfill: `backfill:signals --backfill-base` (sem rede, idempotente).
+
 ## Contrato null ≠ 0
 
 `signalScore null` = **não medido** (retrieve não rodou/expirou). `0` = medido

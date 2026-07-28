@@ -17,7 +17,8 @@
     "@forja/db": "workspace:*",
     "bullmq": "^5.15.0",
     "cheerio": "^1.0.0",
-    "ioredis": "^5.4.1"
+    "ioredis": "^5.4.1",
+    "tldts": "^7.4.9"
   },
   "devDependencies": {
     "@types/node": "^22.7.4",

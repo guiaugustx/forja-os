@@ -19,6 +19,8 @@
  *   --recompute         recalcula score/tags a partir do JSON gravado (sem rede)
  *   --recheck-category  re-retrieve dos já medidos SEM httpStatus, para aplicar
  *                       as regras de categoria novas (loja/página morta)
+ *   --backfill-base     preenche baseDomain (registrável sem sufixo) dos
+ *                       candidatos resource — sem rede; para o spray de TLD
  */
 import { prisma, Prisma } from '@forja/db';
 import { isScamCategory } from '../src/lib/filters';
@@ -29,6 +31,7 @@ import {
   type DetectedSignals,
 } from '../src/lib/detectSignals';
 import { scaleSignalScore, hasZeroSignal } from '../src/lib/scaleSignalScore';
+import { baseDomainOf } from '../src/lib/baseDomain';
 
 function arg(name: string, fallback: number): number {
   const i = process.argv.indexOf(`--${name}`);
@@ -156,9 +159,51 @@ async function recheckCategoryPass(budget: { remaining: number; throttleMs: numb
   }
 }
 
+/**
+ * Preenche `baseDomain` (nome registrável sem sufixo) dos candidatos de fonte
+ * RESOURCE — sem rede. Percorre o conjunto estável de resource por cursor de id
+ * (não filtra pela coluna que está sendo mutada, para não encolher o cursor);
+ * pula os que já têm baseDomain (resumível) e os de domínio não-parseável
+ * (IP → fica null). Checkout nunca entra: o domínio dele é o gateway.
+ */
+async function backfillBasePass(): Promise<void> {
+  let cursor: string | undefined;
+  let handled = 0;
+  let filled = 0;
+  for (;;) {
+    const batch = await prisma.candidate.findMany({
+      where: { source: { is: { kind: 'resource' } } },
+      select: { id: true, domain: true, baseDomain: true },
+      take: 1000,
+      orderBy: { id: 'asc' },
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    if (batch.length === 0) break;
+    cursor = batch[batch.length - 1].id;
+    handled += batch.length;
+
+    const updates = [];
+    for (const c of batch) {
+      const base = baseDomainOf(c.domain);
+      if (!base) continue; // IP/não-parseável fica null (nunca agrupa)
+      if (base === c.baseDomain) continue; // já correto → resumível e idempotente
+      updates.push(prisma.candidate.update({ where: { id: c.id }, data: { baseDomain: base } }));
+    }
+    await Promise.all(updates);
+    filled += updates.length;
+    console.log(`backfill-base · ${handled} vistos · ${filled} preenchidos`);
+  }
+  console.log(`backfill-base · concluído: ${filled} baseDomain preenchidos`);
+}
+
 async function main() {
   if (has('recompute')) {
     await recomputePass();
+    return;
+  }
+
+  if (has('backfill-base')) {
+    await backfillBasePass();
     return;
   }
 

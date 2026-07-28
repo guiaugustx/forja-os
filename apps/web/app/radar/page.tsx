@@ -767,6 +767,7 @@ export default function RadarPage() {
                 onToggle={toggle}
                 onToggleAll={toggleAll}
                 onDecide={(id, decision) => decide.mutate({ id, decision })}
+                onDiscardGroup={(ids) => bulk.mutate({ ids, decision: 'discard' })}
                 busy={decide.isPending || bulk.isPending}
               />
             </Panel>
